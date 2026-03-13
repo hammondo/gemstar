@@ -1,0 +1,77 @@
+# config/brand-voice.yaml
+
+studio:
+  name: "BodySpace Recovery Studio"
+  tagline: "Relax, Recharge, Recover"
+  location: "Jandakot, Perth, Western Australia"
+  bookingUrl: "https://www.fresha.com/book-now/bodyspace-recovery-studio-oqhdo29p/services?lid=1079794&share=true&pId=1023803"
+  giftCardUrl: "https://www.fresha.com/book-now/bodyspace-recovery-studio-oqhdo29p/gift-cards?share=true&pId=1023803"
+  website: "https://bodyspacerecoverystudio.com.au"
+  instagram: "@bodyspacerecoverystudio"
+
+brandVoice:
+  tone:
+    - "Warm and nurturing — like a trusted friend in wellness"
+    - "Calm, grounding, and restorative"
+    - "Knowledgeable but never clinical or preachy"
+    - "Encouraging self-care without guilt"
+    - "Authentically Perth — relatable, not corporate"
+  avoid:
+    - "Hard-sell or pushy language"
+    - "Medical claims or promises to cure/treat"
+    - "Generic AI-sounding wellness speak"
+    - "Excessive hashtag stuffing"
+    - "American spelling — use Australian English"
+  languageStyle:
+    - "Conversational and approachable — reads like a real person"
+    - "Short, warm sentences for social posts"
+    - "Use 'you' and 'your' to speak directly to the reader"
+    - "Australian spelling throughout (colour, programme, organised)"
+
+audience:
+  primary:
+    - "Women 28–55 in Cockburn, Jandakot, and southern Perth suburbs"
+    - "Stressed professionals needing a reset"
+    - "Athletes and active locals seeking recovery"
+  secondary:
+    - "FIFO (fly-in fly-out) workers returning from roster — exhausted, need recovery"
+    - "Pregnant women or new mothers"
+    - "People curious about natural/holistic healing"
+    - "Gift buyers — partners, friends, corporate"
+  painPoints:
+    - "Chronic stress and burnout"
+    - "Muscle soreness and physical fatigue"
+    - "Poor sleep or low energy"
+    - "Wanting 'me time' without guilt"
+    - "Looking for non-pharmaceutical wellness options"
+
+contentPillars:
+  - name: "education"
+    description: "Explain the science/benefits of services"
+    frequency: "1x per week"
+  - name: "promotion"
+    description: "Highlight specific services, combos, availability-driven offers"
+    frequency: "1–2x per week"
+  - name: "community"
+    description: "Perth life, seasonal wellness, relatable moments"
+    frequency: "1x per week"
+  - name: "social_proof"
+    description: "Reviews, results, testimonials (no before/after body imagery)"
+    frequency: "1x per fortnight"
+  - name: "seasonal"
+    description: "Events, holidays, awareness days, Perth weather, FIFO cycles"
+    frequency: "As relevant"
+
+callsToAction:
+  primary: "Book online →"
+  gift: "Give the gift of recovery →"
+  soft: "Learn more at bodyspacerecoverystudio.com.au"
+  dm: "Send us a DM to find out more"
+
+hashtagSets:
+  recovery: ["recoveryperth", "perthwellness", "bodyrecovery", "musclerecovery", "infraredsauna"]
+  massage: ["massageperth", "remedialmasage", "relaxationmassage", "perthmassage", "selfcareperth"]
+  holistic: ["holistichealing", "reikiperth", "energyhealing", "naturalhealing", "chakrabalance"]
+  general: ["perthlocal", "cockburnperth", "southernperth", "jandakot", "perthsmallbusiness"]
+  maxInstagram: 10
+  maxFacebook: 3

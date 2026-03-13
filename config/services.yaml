@@ -1,0 +1,147 @@
+# config/services.yaml
+# All BodySpace services with marketing signal thresholds.
+# pushThreshold: available slots >= this → PUSH marketing heavily
+# pauseThreshold: available slots <= this → PAUSE marketing (nearly booked)
+
+services:
+  massageTherapy:
+    - id: relaxation_massage
+      name: "Relaxation Massage"
+      category: "Massage Therapy"
+      url: "https://bodyspacerecoverystudio.com.au/relaxation-massage/"
+      pushThreshold: 8
+      pauseThreshold: 1
+      keyBenefits: ["stress relief", "muscle tension", "deep relaxation", "sleep improvement"]
+      targetAudience: ["stressed professionals", "self-care seekers", "gift recipients"]
+
+    - id: remedial_massage
+      name: "Remedial Massage"
+      category: "Massage Therapy"
+      url: "https://bodyspacerecoverystudio.com.au/remedial-massage/"
+      pushThreshold: 8
+      pauseThreshold: 1
+      keyBenefits: ["injury recovery", "chronic pain", "postural correction", "sports recovery"]
+      targetAudience: ["athletes", "FIFO workers", "people with chronic pain"]
+
+    - id: pregnancy_massage
+      name: "Pregnancy Massage"
+      category: "Massage Therapy"
+      url: "https://bodyspacerecoverystudio.com.au/pregnancy-massage/"
+      pushThreshold: 5
+      pauseThreshold: 1
+      keyBenefits: ["pregnancy discomfort", "swelling relief", "relaxation for mum-to-be"]
+      targetAudience: ["pregnant women", "partners buying gifts"]
+
+  naturalHealing:
+    - id: reiki
+      name: "Natural Healing – Reiki"
+      category: "Natural Healing"
+      url: "https://bodyspacerecoverystudio.com.au/natural-healing-reiki/"
+      pushThreshold: 6
+      pauseThreshold: 1
+      keyBenefits: ["energy balance", "stress relief", "emotional healing", "spiritual wellbeing"]
+      targetAudience: ["holistic wellness seekers", "stressed professionals"]
+
+    - id: chakra_balance
+      name: "Natural Healing – Chakra Balance"
+      category: "Natural Healing"
+      url: "https://bodyspacerecoverystudio.com.au/natural-healing-chakra-balance/"
+      pushThreshold: 6
+      pauseThreshold: 1
+      keyBenefits: ["energy alignment", "emotional balance", "clarity", "inner calm"]
+      targetAudience: ["holistic wellness seekers", "yoga community"]
+
+    - id: aromatouch
+      name: "Natural Healing – AromaTouch Technique"
+      category: "Natural Healing"
+      url: "https://bodyspacerecoverystudio.com.au/natural-healing-aromatouch-technique/"
+      pushThreshold: 6
+      pauseThreshold: 1
+      keyBenefits: ["essential oil therapy", "stress reduction", "immune support"]
+      targetAudience: ["natural health advocates", "doTERRA community"]
+
+    - id: ayurvedic_foot
+      name: "Natural Healing – Ayurvedic Foot Massage"
+      category: "Natural Healing"
+      url: "https://bodyspacerecoverystudio.com.au/natural-healing-ayurvedic-foot-massage/"
+      pushThreshold: 6
+      pauseThreshold: 1
+      keyBenefits: ["grounding", "circulation", "relaxation", "ancient healing traditions"]
+      targetAudience: ["wellness enthusiasts", "people on their feet all day"]
+
+    - id: energy_healing_children
+      name: "Natural Healing – Energy Healing for Children"
+      category: "Natural Healing"
+      url: "https://bodyspacerecoverystudio.com.au/natural-healing-energy-healing-for-children/"
+      pushThreshold: 4
+      pauseThreshold: 1
+      keyBenefits: ["calm anxious children", "emotional regulation", "gentle and non-invasive"]
+      targetAudience: ["parents with anxious or sensitive children"]
+      contentNote: "Promote sensitively — focus on child's calm and parent's peace of mind"
+
+  wellnessRecovery:
+    - id: bodyroll
+      name: "BodyROLL Massage Machine"
+      category: "Wellness Body Recovery"
+      url: "https://bodyspacerecoverystudio.com.au/bodyroll/"
+      pushThreshold: 10
+      pauseThreshold: 2
+      keyBenefits: ["lymphatic drainage", "cellulite reduction", "circulation boost", "body contouring"]
+      targetAudience: ["body-conscious clients", "detox seekers", "post-op recovery"]
+
+    - id: infrared_sauna
+      name: "Infrared Sauna POD"
+      category: "Wellness Body Recovery"
+      url: "https://bodyspacerecoverystudio.com.au/infrared-wellness-sauna-pod/"
+      pushThreshold: 10
+      pauseThreshold: 2
+      keyBenefits: ["deep detox", "weight management", "pain relief", "improved skin", "relaxation"]
+      targetAudience: ["health optimisers", "FIFO workers", "athletes", "chronic pain sufferers"]
+
+    - id: infrared_sauna_shrinking_violet
+      name: "Infrared Sauna POD + Shrinking Violet"
+      category: "Wellness Body Recovery"
+      url: "https://bodyspacerecoverystudio.com.au/shrinking-violet-infrared-sauna-pod-treatment/"
+      pushThreshold: 8
+      pauseThreshold: 1
+      keyBenefits: ["inch loss", "body wrap", "lymphatic drainage", "detox", "skin tightening"]
+      targetAudience: ["body-conscious clients", "pre-event clients", "brides"]
+
+    - id: normatec_boots
+      name: "NormaTec Recovery Boots"
+      category: "Wellness Body Recovery"
+      url: "https://bodyspacerecoverystudio.com.au/normatec-recovery-boots/"
+      pushThreshold: 12
+      pauseThreshold: 2
+      keyBenefits: ["faster muscle recovery", "reduced soreness", "improved circulation", "sports recovery"]
+      targetAudience: ["athletes", "runners", "FIFO workers", "anyone with tired legs"]
+
+  combinations:
+    - id: bodyroll_bodypod_combo
+      name: "BodyROLL + BodyPOD Combo"
+      category: "Combinations"
+      url: "https://bodyspacerecoverystudio.com.au/bodyroll-bodypod-combo/"
+      pushThreshold: 8
+      pauseThreshold: 1
+      keyBenefits: ["ultimate lymphatic + infrared combo", "maximum results", "great value"]
+      targetAudience: ["repeat clients", "results-focused clients"]
+
+    - id: wellness_kickstart
+      name: "Wellness Kickstart"
+      category: "Combinations"
+      url: "https://bodyspacerecoverystudio.com.au/wellness-body-recovery/"
+      pushThreshold: 8
+      pauseThreshold: 1
+      keyBenefits: ["comprehensive wellness package", "great intro offer", "multiple modalities"]
+      targetAudience: ["new clients", "gift recipients", "January wellness surge"]
+
+signalRules:
+  push:
+    description: "High availability — promote heavily, may suggest limited-time offers"
+    postFrequency: "2–3x per week"
+  hold:
+    description: "Normal availability — standard promotion"
+    postFrequency: "1x per week"
+  pause:
+    description: "Nearly or fully booked — exclude from campaigns"
+    postFrequency: "0x per week"

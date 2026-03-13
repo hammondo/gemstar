@@ -1,0 +1,57 @@
+# config/competitors.yaml
+# Competitor studios and trend sources for the Monitor agent to research.
+
+competitors:
+  primary:
+    - name: "Float Perth"
+      searchTerms: ["float perth wellness", "float tank perth"]
+      monitorFor: ["new services", "promotions", "pricing", "social content"]
+
+    - name: "Fresha-listed studios Cockburn/Jandakot"
+      searchTerms: ["fresha massage cockburn perth", "fresha wellness jandakot", "fresha infrared sauna perth southern suburbs"]
+      monitorFor: ["new competitors", "review trends", "pricing benchmarks"]
+
+    - name: "Perth southern suburbs wellness studios"
+      searchTerms: ["wellness studio cockburn perth", "massage spa jandakot", "recovery studio southern perth"]
+      monitorFor: ["new openings", "promotions", "services gap"]
+
+trendSources:
+  industry:
+    - search: "wellness studio trends Australia 2026"
+    - search: "infrared sauna benefits trending Australia"
+    - search: "NormaTec recovery boots trending"
+    - search: "lymphatic drainage massage Perth"
+    - search: "holistic healing Reiki trending Perth"
+
+  seasonal:
+    - name: "FIFO roster cycles"
+      description: "Perth mining industry workers on 2-weeks-on/2-weeks-off. Target 'return from roster' recovery messaging."
+      monthsHigh: [1, 2, 3, 7, 8, 9]
+
+    - name: "Perth summer"
+      months: [11, 12, 1, 2]
+      messaging: "Infrared pod, cooling recovery, hydration — adapt for heat"
+
+    - name: "Perth winter wellness"
+      months: [6, 7, 8]
+      messaging: "Warm up with infrared sauna, immune support, cosy self-care"
+
+    - name: "New Year wellness surge"
+      months: [1]
+      messaging: "New year reset, wellness kickstart, new habits"
+
+    - name: "Valentine's Day"
+      months: [2]
+      messaging: "Gift vouchers, couples packages, treat yourself"
+
+    - name: "Mother's Day"
+      months: [5]
+      messaging: "Gift vouchers, mum deserves a break, pregnancy massage gifts"
+
+    - name: "End of financial year"
+      months: [6]
+      messaging: "Health fund extras reminder — use remaining cover for massage"
+
+    - name: "Footy finals / AFL season"
+      months: [8, 9]
+      messaging: "Recovery for weekend warriors and sports fans — NormaTec, remedial massage"

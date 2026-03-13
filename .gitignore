@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+data/bodyspace.db
+data/pending-review/
+data/approved/
+data/published/
+data/trends/
+logs/
+config/google-service-account.json
+*.js.map
