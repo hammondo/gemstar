@@ -36,19 +36,25 @@ Output ONLY valid JSON — no preamble, no markdown fences.
 `;
 
 export class MonitorAgent {
-  private client: Anthropic;
+  private client: Anthropic | null;
 
   constructor() {
-    if (!settings.anthropicApiKey) {
-      throw new Error("ANTHROPIC_API_KEY is required to run MonitorAgent");
+    if (settings.mockAnthropic) {
+      console.log("[Monitor] Running in MOCK mode");
+      this.client = null;
+    } else {
+      if (!settings.anthropicApiKey) {
+        throw new Error("ANTHROPIC_API_KEY is required to run MonitorAgent");
+      }
+      this.client = new Anthropic({ apiKey: settings.anthropicApiKey });
     }
-    this.client = new Anthropic({ apiKey: settings.anthropicApiKey });
   }
 
   async run(): Promise<TrendsBrief> {
     console.log("[Monitor] Starting weekly research...");
-    const prompt = this.buildPrompt();
-    const data = await this.runResearch(prompt);
+    const data = settings.mockAnthropic
+      ? this.getMockBrief()
+      : await this.runResearch(this.buildPrompt());
     const brief = saveTrendsBrief(data);
 
     // Write to file for easy review
@@ -71,7 +77,9 @@ export class MonitorAgent {
       message: "Starting Claude research with web search...",
     });
 
-    const data = await this.runResearchStreaming(prompt, onProgress);
+    const data = settings.mockAnthropic
+      ? await this.getMockBriefStreaming(onProgress)
+      : await this.runResearchStreaming(prompt, onProgress);
     const brief = saveTrendsBrief(data);
 
     const trendsDir = resolve(settings.dataDir, "trends");
@@ -137,7 +145,7 @@ Return ONLY valid JSON matching this exact schema:
   }
 
   private async runResearch(prompt: string): Promise<GeneratedTrendsBrief> {
-    const response = await this.client.messages.create({
+    const response = await this.client!.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
       system: SYSTEM_PROMPT,
@@ -158,7 +166,7 @@ Return ONLY valid JSON matching this exact schema:
     prompt: string,
     onProgress: OnProgress,
   ): Promise<GeneratedTrendsBrief> {
-    const stream = this.client.messages.stream({
+    const stream = this.client!.messages.stream({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
       system: SYSTEM_PROMPT,
@@ -228,6 +236,61 @@ Return ONLY valid JSON matching this exact schema:
         confidence: "low",
       };
     }
+  }
+
+  private getMockBrief(): GeneratedTrendsBrief {
+    const today = new Date().toLocaleDateString("en-AU", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "Australia/Perth",
+    });
+    return {
+      weekOf: today,
+      competitorSummary:
+        "[MOCK] Float Perth launched a new magnesium float package. O2 Float is running a March Madness promo. Local Cockburn studios are quiet on social.",
+      trendSignals:
+        "[MOCK] Infrared sauna demand continues to rise in Perth metro. NormaTec recovery boots trending with weekend athletes. Lymphatic drainage gaining mainstream awareness via TikTok.",
+      seasonalFactors:
+        "[MOCK] Autumn approaching — daylight shortening prompts indoor wellness bookings. AFL season starting drives recovery demand from weekend players.",
+      recommendedFocus:
+        "[MOCK] Push infrared sauna + NormaTec combo packages. Target FIFO workers returning from swing with recovery bundles.",
+      opportunities:
+        '[MOCK] No local competitor is offering BodyROLL lymphatic machine — unique differentiator. Consider a "Recovery Day" package bundling sauna + NormaTec + massage.',
+      sources: ["[MOCK] simulated data"],
+      confidence: "medium",
+    };
+  }
+
+  private async getMockBriefStreaming(
+    onProgress: OnProgress,
+  ): Promise<GeneratedTrendsBrief> {
+    const steps = [
+      "Searching Perth wellness competitors...",
+      "Web search #1 in progress...",
+      "Analysing competitor activity...",
+      "Web search #2 in progress...",
+      "Researching wellness trends...",
+      "Web search #3 in progress...",
+      "Checking seasonal factors...",
+      "Generating brief...",
+    ];
+    for (const step of steps) {
+      onProgress({ type: "status", message: `[MOCK] ${step}` });
+      await new Promise((r) => setTimeout(r, 600));
+    }
+    const data = this.getMockBrief();
+    const json = JSON.stringify(data, null, 2);
+    for (let i = 0; i < json.length; i += 40) {
+      onProgress({ type: "text", message: json.slice(i, i + 40) });
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    onProgress({
+      type: "status",
+      message: "[MOCK] Research complete — 3 web searches simulated",
+    });
+    return data;
   }
 
   getLatestBrief(): TrendsBrief | null {

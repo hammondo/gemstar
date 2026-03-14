@@ -23,17 +23,22 @@ import type {
 } from "../../types.js";
 
 export class CampaignPlannerAgent {
-  private client: Anthropic;
+  private client: Anthropic | null;
   private brand = getBrandVoice();
   private services = getAllServices();
 
   constructor() {
-    if (!settings.anthropicApiKey) {
-      throw new Error(
-        "ANTHROPIC_API_KEY is required to run CampaignPlannerAgent",
-      );
+    if (settings.mockAnthropic) {
+      console.log("[CampaignPlanner] Running in MOCK mode");
+      this.client = null;
+    } else {
+      if (!settings.anthropicApiKey) {
+        throw new Error(
+          "ANTHROPIC_API_KEY is required to run CampaignPlannerAgent",
+        );
+      }
+      this.client = new Anthropic({ apiKey: settings.anthropicApiKey });
     }
-    this.client = new Anthropic({ apiKey: settings.anthropicApiKey });
   }
 
   async run(
@@ -63,7 +68,9 @@ export class CampaignPlannerAgent {
       brief,
       options.ownerBrief,
     );
-    const generated = await this.generate(prompt);
+    const generated = settings.mockAnthropic
+      ? this.getMockCampaign()
+      : await this.generate(prompt);
     const campaign = this.buildCampaignRecord(generated, signals, brief?.id);
 
     saveCampaign(campaign);
@@ -222,7 +229,7 @@ Return ONLY valid JSON:
   }
 
   private async generate(prompt: string): Promise<GeneratedCampaign> {
-    const response = await this.client.messages.create({
+    const response = await this.client!.messages.create({
       model: "claude-sonnet-4-20250514",
       max_tokens: 8000,
       system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio, 
@@ -287,6 +294,225 @@ Output ONLY valid JSON, no preamble, no markdown fences.`,
       ),
       trendsBriefId,
       createdAt: now,
+      posts,
+    };
+  }
+
+  private getMockCampaign(): GeneratedCampaign {
+    const start = nextMonday(new Date());
+    const posts: GeneratedPost[] = [
+      {
+        week: 1,
+        day: "Monday",
+        scheduledDate: format(start),
+        platform: "instagram",
+        postType: "feed",
+        contentPillar: "education",
+        copy: "[MOCK] Did you know infrared saunas can help reduce inflammation and promote deep relaxation? Our Infrared Sauna POD sessions are the perfect way to reset after a long week. Your body will thank you. \u2728\n\nBook your session today \u2192 bodyspacerecoverystudio.com.au",
+        imageDirection: "Warm amber-lit interior shot of infrared sauna pod",
+        hashtags: [
+          "infraredsauna",
+          "perthwellness",
+          "bodyspace",
+          "recovery",
+          "selfcare",
+        ],
+        callToAction: "Book online",
+        serviceFocus: "infrared_sauna_pod",
+      },
+      {
+        week: 1,
+        day: "Wednesday",
+        scheduledDate: format(addDays(start, 2)),
+        platform: "instagram",
+        postType: "feed",
+        contentPillar: "promotion",
+        copy: "[MOCK] This week only \u2014 $99 Recovery Combo: NormaTec Boots + Infrared Sauna. Your legs (and your mind) deserve it. \ud83d\ude4f\n\nSpots are limited, book now \u2192 bodyspacerecoverystudio.com.au",
+        imageDirection: "Close-up of NormaTec boots on relaxed client",
+        hashtags: [
+          "normatec",
+          "recovery",
+          "perthfitness",
+          "wellness",
+          "jandakot",
+        ],
+        callToAction: "Book the combo",
+        serviceFocus: "normatec",
+      },
+      {
+        week: 1,
+        day: "Friday",
+        scheduledDate: format(addDays(start, 4)),
+        platform: "facebook",
+        postType: "feed",
+        contentPillar: "community",
+        copy: "[MOCK] We love seeing our regulars walk out feeling lighter. Thanks to everyone who visited BodySpace this week \u2014 you\u2019re investing in yourselves and it shows. See you next week! \u2764\ufe0f",
+        imageDirection: "Candid reception area photo with warm lighting",
+        hashtags: ["bodyspace", "cockburn", "community"],
+        callToAction: "Book your next visit",
+        serviceFocus: undefined,
+      },
+      {
+        week: 2,
+        day: "Monday",
+        scheduledDate: format(addDays(start, 7)),
+        platform: "instagram",
+        postType: "feed",
+        contentPillar: "education",
+        copy: "[MOCK] Lymphatic drainage isn\u2019t just a trend \u2014 it\u2019s one of the most effective ways to support your immune system and reduce fluid retention. Our BodyROLL machine makes it gentle, relaxing, and genuinely effective.",
+        imageDirection: "BodyROLL machine in use, soft studio lighting",
+        hashtags: [
+          "lymphaticdrainage",
+          "bodyroll",
+          "perthhealth",
+          "wellness",
+          "holistic",
+        ],
+        callToAction: "Learn more",
+        serviceFocus: "bodyroll",
+      },
+      {
+        week: 2,
+        day: "Wednesday",
+        scheduledDate: format(addDays(start, 9)),
+        platform: "instagram",
+        postType: "feed",
+        contentPillar: "seasonal",
+        copy: "[MOCK] Autumn is the perfect time to slow down and reconnect with your body. As the days shorten, give yourself permission to rest and restore. \ud83c\udf42",
+        imageDirection: "Autumn-toned flat lay with candles and towels",
+        hashtags: [
+          "autumn",
+          "perthautumn",
+          "slowdown",
+          "selfcare",
+          "bodyspace",
+        ],
+        callToAction: "Book a treatment",
+        serviceFocus: undefined,
+      },
+      {
+        week: 2,
+        day: "Friday",
+        scheduledDate: format(addDays(start, 11)),
+        platform: "facebook",
+        postType: "feed",
+        contentPillar: "promotion",
+        copy: "[MOCK] FIFO workers \u2014 we see you. Come in for a Remedial Massage + NormaTec session and feel human again after your swing. You\u2019ve earned it.",
+        imageDirection: "Male client relaxing post-treatment",
+        hashtags: ["fifo", "remedial", "recovery"],
+        callToAction: "Book now",
+        serviceFocus: "remedial_massage",
+      },
+      {
+        week: 3,
+        day: "Monday",
+        scheduledDate: format(addDays(start, 14)),
+        platform: "instagram",
+        postType: "feed",
+        contentPillar: "social_proof",
+        copy: "[MOCK] \u2b50 \u201cBest massage I\u2019ve had in Perth. The studio is so peaceful and Mel really listens to what your body needs.\u201d \u2014 Sarah K.\n\nThank you Sarah! Reviews like this make our day.",
+        imageDirection: "Testimonial graphic with studio branding",
+        hashtags: [
+          "perthreview",
+          "testimonial",
+          "massage",
+          "bodyspace",
+          "jandakot",
+        ],
+        callToAction: "Read more reviews",
+        serviceFocus: "relaxation_massage",
+      },
+      {
+        week: 3,
+        day: "Wednesday",
+        scheduledDate: format(addDays(start, 16)),
+        platform: "instagram",
+        postType: "feed",
+        contentPillar: "education",
+        copy: "[MOCK] Reiki isn\u2019t \u201cwoo woo\u201d \u2014 it\u2019s a deeply grounding practice that helps calm your nervous system. Perfect for anyone feeling overwhelmed or burnt out.",
+        imageDirection: "Practitioner hands hovering over client, soft light",
+        hashtags: [
+          "reiki",
+          "energyhealing",
+          "perthreiki",
+          "calm",
+          "nervous system",
+        ],
+        callToAction: "Book a session",
+        serviceFocus: "reiki",
+      },
+      {
+        week: 3,
+        day: "Friday",
+        scheduledDate: format(addDays(start, 18)),
+        platform: "facebook",
+        postType: "feed",
+        contentPillar: "promotion",
+        copy: "[MOCK] Gift cards now available! Not sure what to get someone? Give them the gift of relaxation. \ud83c\udf81\n\nbodyspacerecoverystudio.com.au/gift-cards",
+        imageDirection: "Gift card product shot on linen background",
+        hashtags: ["giftcard", "perthgifts", "wellness"],
+        callToAction: "Buy a gift card",
+        serviceFocus: undefined,
+      },
+      {
+        week: 4,
+        day: "Monday",
+        scheduledDate: format(addDays(start, 21)),
+        platform: "instagram",
+        postType: "feed",
+        contentPillar: "seasonal",
+        copy: "[MOCK] Autumn \u2192 shorter days \u2192 more time for YOU. Our Infrared Sauna + Shrinking Violet body wrap is the ultimate autumn indulgence. Detox, tone, and relax in one session.",
+        imageDirection: "Body wrap treatment in progress, warm tones",
+        hashtags: ["bodywrap", "infrared", "detox", "autumn", "perthwellness"],
+        callToAction: "Book the combo",
+        serviceFocus: "infrared_shrinking_violet",
+      },
+      {
+        week: 4,
+        day: "Wednesday",
+        scheduledDate: format(addDays(start, 23)),
+        platform: "instagram",
+        postType: "feed",
+        contentPillar: "promotion",
+        copy: "[MOCK] Pregnancy massage at BodySpace \u2014 because growing a human is hard work. Gentle, supportive, and exactly what your body needs right now. \ud83e\uddf1",
+        imageDirection: "Soft pregnancy massage setup with pillows",
+        hashtags: [
+          "pregnancymassage",
+          "prenatal",
+          "perthmums",
+          "bodyspace",
+          "selfcare",
+        ],
+        callToAction: "Book online",
+        serviceFocus: "pregnancy_massage",
+      },
+      {
+        week: 4,
+        day: "Friday",
+        scheduledDate: format(addDays(start, 25)),
+        platform: "facebook",
+        postType: "feed",
+        contentPillar: "community",
+        copy: "[MOCK] Thank you for an incredible month, BodySpace family. We\u2019re so grateful for every single one of you who walks through our doors. Here\u2019s to another month of rest, recovery, and feeling your best. \u2764\ufe0f",
+        imageDirection: "Team photo or studio exterior at golden hour",
+        hashtags: ["bodyspace", "thankyou", "community"],
+        callToAction: "See you next month",
+        serviceFocus: undefined,
+      },
+    ];
+    return {
+      campaignName: "[MOCK] Autumn Reset",
+      campaignTheme:
+        "Slow down, warm up, and invest in your recovery this autumn.",
+      campaignDescription:
+        "[MOCK] A 4-week campaign focused on autumn wellness, targeting recovery services and infrared treatments. Designed to drive bookings for underutilised services while building community engagement.",
+      targetServices: [
+        "infrared_sauna_pod",
+        "normatec",
+        "bodyroll",
+        "remedial_massage",
+      ],
+      durationWeeks: 4,
       posts,
     };
   }

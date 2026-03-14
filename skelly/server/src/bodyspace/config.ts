@@ -24,6 +24,7 @@ function envInt(key: string, fallback: number): number {
 
 export const settings = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  mockAnthropic: process.env.MOCK_ANTHROPIC === "true",
 
   // Fresha
   freshaDb: {
