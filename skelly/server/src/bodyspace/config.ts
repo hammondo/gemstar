@@ -8,7 +8,7 @@ import yaml from "js-yaml";
 import type { BrandVoiceConfig, ServiceConfig } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(__dirname, "..");
+const ROOT = resolve(__dirname, "../..");
 
 function env(key: string, fallback?: string): string {
   const val = process.env[key] ?? fallback;
@@ -23,7 +23,7 @@ function envInt(key: string, fallback: number): number {
 // ─── Settings object ──────────────────────────────────────────────────────
 
 export const settings = {
-  anthropicApiKey: env("ANTHROPIC_API_KEY"),
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
 
   // Fresha
   freshaDb: {
@@ -46,8 +46,8 @@ export const settings = {
   ownerPhone: process.env.OWNER_PHONE ?? "",
 
   // Dashboard
-  dashboardPort: envInt("DASHBOARD_PORT", 3001),
-  dashboardBaseUrl: process.env.DASHBOARD_BASE_URL ?? "http://localhost:3001",
+  dashboardPort: envInt("DASHBOARD_PORT", 5173),
+  dashboardBaseUrl: process.env.DASHBOARD_BASE_URL ?? "http://localhost:5173",
   dashboardSessionSecret: process.env.DASHBOARD_SESSION_SECRET ?? "dev-secret",
   dashboardPassword: process.env.DASHBOARD_PASSWORD ?? "bodyspace2025",
 
@@ -77,14 +77,18 @@ function loadYaml<T>(filename: string): T {
 
 let _brandVoice: BrandVoiceConfig | null = null;
 export function getBrandVoice(): BrandVoiceConfig {
-  if (!_brandVoice) _brandVoice = loadYaml<BrandVoiceConfig>("brand-voice.yaml");
+  if (!_brandVoice)
+    _brandVoice = loadYaml<BrandVoiceConfig>("brand-voice.yaml");
   return _brandVoice;
 }
 
 let _services: ServiceConfig[] | null = null;
 export function getAllServices(): ServiceConfig[] {
   if (_services) return _services;
-  const raw = loadYaml<{ services: Record<string, ServiceConfig[]>; signalRules: unknown }>("services.yaml");
+  const raw = loadYaml<{
+    services: Record<string, ServiceConfig[]>;
+    signalRules: unknown;
+  }>("services.yaml");
   _services = Object.values(raw.services).flat();
   return _services;
 }

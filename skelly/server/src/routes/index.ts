@@ -1,10 +1,10 @@
 import { Router } from "express";
 import healthRouter from "./health.js";
-import sampleRouter from "./sample.js";
+import bodyspaceRouter from "./bodyspace.js";
 
 const apiRouter = Router();
 
 apiRouter.use("/health", healthRouter);
-apiRouter.use("/sample", sampleRouter);
+apiRouter.use("/bodyspace", bodyspaceRouter);
 
 export default apiRouter;

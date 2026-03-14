@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import apiRouter from "./routes/index.js";
+import { startBodyspaceScheduler } from "./bodyspace/orchestrator.js";
 
 dotenv.config();
 
@@ -22,9 +23,10 @@ app.use(
 app.use("/api", apiRouter);
 
 app.get("/", (_req, res) => {
-  res.json({ message: "Skelly API running" });
+  res.json({ message: "Skelly API running", bodyspaceApi: "/api/bodyspace" });
 });
 
 app.listen(port, () => {
   console.log(`Skelly API listening on http://localhost:${port}`);
+  // startBodyspaceScheduler();
 });

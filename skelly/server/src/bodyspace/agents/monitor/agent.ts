@@ -32,6 +32,9 @@ export class MonitorAgent {
   private client: Anthropic;
 
   constructor() {
+    if (!settings.anthropicApiKey) {
+      throw new Error("ANTHROPIC_API_KEY is required to run MonitorAgent");
+    }
     this.client = new Anthropic({ apiKey: settings.anthropicApiKey });
   }
 
@@ -53,10 +56,16 @@ export class MonitorAgent {
 
   private buildPrompt(): string {
     const today = new Date().toLocaleDateString("en-AU", {
-      weekday: "long", day: "numeric", month: "long", year: "numeric",
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
       timeZone: "Australia/Perth",
     });
-    const month = new Date().toLocaleString("en-AU", { month: "long", timeZone: "Australia/Perth" });
+    const month = new Date().toLocaleString("en-AU", {
+      month: "long",
+      timeZone: "Australia/Perth",
+    });
 
     return `
 Today is ${today}.
@@ -102,7 +111,7 @@ Return ONLY valid JSON matching this exact schema:
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
       system: SYSTEM_PROMPT,
-      tools: [{ type: "web_search_20250305" as const, name: "web_search" }],
+      tools: [{ name: "web_search", type: "web_search_20250305" }] as never,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -143,12 +152,4 @@ Return ONLY valid JSON matching this exact schema:
   getLatestBrief(): TrendsBrief | null {
     return getLatestTrendsBrief();
   }
-}
-
-// Run standalone
-if (process.argv[1].endsWith("agent.ts") || process.argv[1].endsWith("agent.js")) {
-  const agent = new MonitorAgent();
-  agent.run().then((brief) => {
-    console.log("\nRecommended focus:", brief.recommendedFocus);
-  });
 }

@@ -7,10 +7,19 @@ import { writeFileSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import { addDays, nextMonday, format } from "../../utils/dates.js";
 import { settings, getBrandVoice, getAllServices } from "../../config.js";
-import { saveCampaign, getLatestSignals, getLatestTrendsBrief } from "../../db.js";
+import {
+  saveCampaign,
+  getLatestSignals,
+  getLatestTrendsBrief,
+} from "../../db.js";
 import type {
-  Campaign, SocialPost, AvailabilitySignals, TrendsBrief,
-  GeneratedCampaign, GeneratedPost, PostStatus,
+  Campaign,
+  SocialPost,
+  AvailabilitySignals,
+  TrendsBrief,
+  GeneratedCampaign,
+  GeneratedPost,
+  PostStatus,
 } from "../../types.js";
 
 export class CampaignPlannerAgent {
@@ -19,27 +28,41 @@ export class CampaignPlannerAgent {
   private services = getAllServices();
 
   constructor() {
+    if (!settings.anthropicApiKey) {
+      throw new Error(
+        "ANTHROPIC_API_KEY is required to run CampaignPlannerAgent",
+      );
+    }
     this.client = new Anthropic({ apiKey: settings.anthropicApiKey });
   }
 
-  async run(options: {
-    availabilitySignals?: AvailabilitySignals;
-    trendsBrief?: TrendsBrief | null;
-    ownerBrief?: string;
-  } = {}): Promise<Campaign> {
+  async run(
+    options: {
+      availabilitySignals?: AvailabilitySignals;
+      trendsBrief?: TrendsBrief | null;
+      ownerBrief?: string;
+    } = {},
+  ): Promise<Campaign> {
     const signals = options.availabilitySignals ?? getLatestSignals();
     const brief = options.trendsBrief ?? getLatestTrendsBrief();
 
     const pushServices = Object.fromEntries(
-      Object.entries(signals).filter(([, v]) => v.signal === "push")
+      Object.entries(signals).filter(([, v]) => v.signal === "push"),
     );
     const pauseServices = Object.fromEntries(
-      Object.entries(signals).filter(([, v]) => v.signal === "pause")
+      Object.entries(signals).filter(([, v]) => v.signal === "pause"),
     );
 
-    console.log(`[CampaignPlanner] PUSH: ${Object.keys(pushServices).length} services, PAUSE: ${Object.keys(pauseServices).length}`);
+    console.log(
+      `[CampaignPlanner] PUSH: ${Object.keys(pushServices).length} services, PAUSE: ${Object.keys(pauseServices).length}`,
+    );
 
-    const prompt = this.buildPrompt(pushServices, pauseServices, brief, options.ownerBrief);
+    const prompt = this.buildPrompt(
+      pushServices,
+      pauseServices,
+      brief,
+      options.ownerBrief,
+    );
     const generated = await this.generate(prompt);
     const campaign = this.buildCampaignRecord(generated, signals, brief?.id);
 
@@ -51,7 +74,9 @@ export class CampaignPlannerAgent {
     const filename = `campaign_${campaign.id.slice(0, 8)}_${new Date().toISOString().slice(0, 10)}.json`;
     writeFileSync(resolve(dir, filename), JSON.stringify(campaign, null, 2));
 
-    console.log(`[CampaignPlanner] Campaign '${campaign.name}' created with ${campaign.posts.length} posts`);
+    console.log(
+      `[CampaignPlanner] Campaign '${campaign.name}' created with ${campaign.posts.length} posts`,
+    );
     return campaign;
   }
 
@@ -66,23 +91,34 @@ export class CampaignPlannerAgent {
     const campaignEnd = addDays(today, 28);
 
     const pushList = Object.values(pushServices).length
-      ? Object.values(pushServices).map((v) => `  - ${v.serviceName} (${v.availableSlots} slots free)`).join("\n")
+      ? Object.values(pushServices)
+          .map((v) => `  - ${v.serviceName} (${v.availableSlots} slots free)`)
+          .join("\n")
       : "  (none — all services have normal availability)";
 
     const pauseList = Object.values(pauseServices).length
-      ? Object.values(pauseServices).map((v) => `  - ${v.serviceName} (${v.availableSlots} slots — nearly booked)`).join("\n")
+      ? Object.values(pauseServices)
+          .map(
+            (v) =>
+              `  - ${v.serviceName} (${v.availableSlots} slots — nearly booked)`,
+          )
+          .join("\n")
       : "  (none)";
 
-    const trendsContext = brief ? `
+    const trendsContext = brief
+      ? `
 WEEKLY TRENDS BRIEF:
 - Competitor activity: ${brief.competitorSummary}
 - Trend signals: ${brief.trendSignals}
 - Seasonal factors: ${brief.seasonalFactors}
 - Recommended focus: ${brief.recommendedFocus}
 - Opportunities: ${brief.opportunities}
-` : "";
+`
+      : "";
 
-    const ownerContext = ownerBrief ? `\nOWNER'S REQUEST:\n${ownerBrief}\n` : "";
+    const ownerContext = ownerBrief
+      ? `\nOWNER'S REQUEST:\n${ownerBrief}\n`
+      : "";
 
     // Build schedule: Mon/Wed/Fri for 4 weeks
     const scheduleDates = this.buildScheduleDates(today);
@@ -153,7 +189,9 @@ Return ONLY valid JSON:
 `;
   }
 
-  private buildScheduleDates(start: Date): Array<{ date: string; label: string; platform: string }> {
+  private buildScheduleDates(
+    start: Date,
+  ): Array<{ date: string; label: string; platform: string }> {
     const dates: Array<{ date: string; label: string; platform: string }> = [];
     const platforms = ["instagram", "instagram", "facebook"]; // Mon=IG, Wed=IG, Fri=FB
     let current = nextMonday(start);
@@ -163,9 +201,21 @@ Return ONLY valid JSON:
       const wed = addDays(mon, 2);
       const fri = addDays(mon, 4);
 
-      dates.push({ date: format(mon), label: `Week ${week + 1} Mon`, platform: platforms[0] });
-      dates.push({ date: format(wed), label: `Week ${week + 1} Wed`, platform: platforms[1] });
-      dates.push({ date: format(fri), label: `Week ${week + 1} Fri`, platform: platforms[2] });
+      dates.push({
+        date: format(mon),
+        label: `Week ${week + 1} Mon`,
+        platform: platforms[0],
+      });
+      dates.push({
+        date: format(wed),
+        label: `Week ${week + 1} Wed`,
+        platform: platforms[1],
+      });
+      dates.push({
+        date: format(fri),
+        label: `Week ${week + 1} Fri`,
+        platform: platforms[2],
+      });
     }
 
     return dates;
@@ -214,7 +264,9 @@ Output ONLY valid JSON, no preamble, no markdown fences.`,
       imageDirection: p.imageDirection,
       hashtags: p.hashtags,
       callToAction: p.callToAction,
-      scheduledFor: p.scheduledDate ? `${p.scheduledDate}T09:00:00+08:00` : undefined,
+      scheduledFor: p.scheduledDate
+        ? `${p.scheduledDate}T09:00:00+08:00`
+        : undefined,
       status: "pending_review" as PostStatus,
       createdAt: now,
     }));
@@ -228,21 +280,14 @@ Output ONLY valid JSON, no preamble, no markdown fences.`,
       durationWeeks: data.durationWeeks,
       status: "pending_review",
       freshaSignals: Object.fromEntries(
-        Object.entries(signals).map(([k, v]) => [k, { signal: v.signal, slots: v.availableSlots }])
+        Object.entries(signals).map(([k, v]) => [
+          k,
+          { signal: v.signal, slots: v.availableSlots },
+        ]),
       ),
       trendsBriefId,
       createdAt: now,
       posts,
     };
   }
-}
-
-// Run standalone
-if (process.argv[1].endsWith("agent.ts") || process.argv[1].endsWith("agent.js")) {
-  const agent = new CampaignPlannerAgent();
-  agent.run({ ownerBrief: process.argv[2] }).then((campaign) => {
-    console.log(`\nCampaign: ${campaign.name}`);
-    console.log(`Posts: ${campaign.posts.length}`);
-    console.log(`Status: ${campaign.status}`);
-  });
 }
