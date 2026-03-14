@@ -18,12 +18,12 @@ import { getAllServices, settings } from '../../config.js';
 import { getLatestSignals, saveAvailabilitySignals } from '../../db.js';
 import type { AvailabilitySignal, AvailabilitySignals } from '../../types.js';
 // ─── Fresha CSV column name variations ───────────────────────────────────
-const SERVICE_COL_ALIASES = ['Service', 'Service Name', 'Treatment', 'service', 'Service name'];
-const DATE_COL_ALIASES = ['Date', 'Appointment Date', 'date', 'Appointment date'];
-const STATUS_COL_ALIASES = ['Status', 'Appointment Status', 'status', 'Appointment status'];
+const SERVICE_COL_ALIASES = ['Service', 'Service Name', 'Treatment'];
+const DATE_COL_ALIASES = ['Scheduled Date', 'Appointment Date', 'date'];
+const STATUS_COL_ALIASES = ['Status', 'Appointment Status'];
 
 // Statuses in the CSV that mean a slot is occupied
-const BOOKED_STATUSES = ['booked', 'confirmed', 'pending', 'arrived', 'started', 'in progress'];
+const BOOKED_STATUSES = ['new', 'booked', 'confirmed', 'pending', 'arrived', 'started', 'in progress'];
 
 // ─── Fresha service name → internal service ID ────────────────────────────
 // Keys are lowercase Fresha service names as they appear in the CSV export.
@@ -31,22 +31,19 @@ const BOOKED_STATUSES = ['booked', 'confirmed', 'pending', 'arrived', 'started',
 
 const SERVICE_NAME_MAP: Record<string, string> = {
     'relaxation massage': 'relaxation_massage',
+    'swedish massage': 'relaxation_massage',
     'remedial massage': 'remedial_massage',
     'pregnancy massage': 'pregnancy_massage',
-    'natural healing – reiki': 'reiki',
+    'postnatal massage': 'pregnancy_massage',
     'natural healing - reiki': 'reiki',
     reiki: 'reiki',
-    'natural healing – chakra balance': 'chakra_balance',
     'natural healing - chakra balance': 'chakra_balance',
     'chakra balance': 'chakra_balance',
-    'natural healing – aromatouch technique': 'aromatouch',
     'natural healing - aromatouch technique': 'aromatouch',
     'aromatouch technique': 'aromatouch',
     aromatouch: 'aromatouch',
-    'natural healing – ayurvedic foot massage': 'ayurvedic_foot',
     'natural healing - ayurvedic foot massage': 'ayurvedic_foot',
     'ayurvedic foot massage': 'ayurvedic_foot',
-    'natural healing – energy healing for children': 'energy_healing_children',
     'natural healing - energy healing for children': 'energy_healing_children',
     'energy healing for children': 'energy_healing_children',
     'bodyroll massage machine': 'bodyroll',
@@ -64,6 +61,7 @@ const SERVICE_NAME_MAP: Record<string, string> = {
     'bodyroll + bodypod combo': 'bodyroll_bodypod_combo',
     'bodyroll bodypod combo': 'bodyroll_bodypod_combo',
     'wellness kickstart': 'wellness_kickstart',
+    'body lymphatic drainage massage': 'lymphatic_drainage_massage',
 };
 
 // ─── Mock booking counts (used when no CSV is available) ─────────────────
@@ -82,6 +80,7 @@ const MOCK_BOOKINGS: Record<string, number> = {
     normatec_boots: 1,
     bodyroll_bodypod_combo: 4,
     wellness_kickstart: 5,
+    lymphatic_drainage_massage: 3,
 };
 
 // ─── Agent ────────────────────────────────────────────────────────────────

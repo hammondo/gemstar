@@ -14,7 +14,7 @@
 // Runs automatically as part of the daily FreshaWatcherAgent,
 // or manually: npm run fresha:download
 
-import { mkdirSync, readdirSync, unlinkSync } from 'fs';
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { chromium, type Page } from 'playwright';
 import { settings } from '../../config.js';
@@ -23,7 +23,7 @@ const FRESHA_EMAIL = process.env.FRESHA_EMAIL ?? '';
 const FRESHA_PASSWORD = process.env.FRESHA_PASSWORD ?? '';
 const EXPORTS_DIR = resolve(settings.dataDir, 'fresha-exports');
 const LOGIN_URL = 'https://partners.fresha.com/users/sign-in';
-const APPOINTMENTS_URL = 'https://partners.fresha.com/reports/table/appointment-list';
+const APPOINTMENT_LIST_URL = 'https://partners.fresha.com/reports/table/appointment-list';
 
 export class FreshaDownloader {
     /**
@@ -59,10 +59,10 @@ export class FreshaDownloader {
             // ── Step 1: Log in ──────────────────────────────────────────────
             await this.login(page);
 
-            // ── Step 2: Navigate to appointments report ─────────────────────
+            // ── Step 2: Navigate to appointment list report ─────────────────────
             await this.navigateToReport(page);
 
-            // ── Step 3: Set date range to next 14 days ──────────────────────
+            // ── Step 3: Set date range to next 30 days ──────────────────────
             await this.setDateRange(page);
 
             // ── Step 4: Download CSV ────────────────────────────────────────
@@ -118,25 +118,32 @@ export class FreshaDownloader {
     }
 
     private async navigateToReport(page: Page): Promise<void> {
-        console.log('[FreshaDownloader] Navigating to appointments report...');
-        await page.goto(APPOINTMENTS_URL, { waitUntil: 'networkidle' });
+        console.log('[FreshaDownloader] Navigating to appointment list report...');
+        await page.goto(APPOINTMENT_LIST_URL, { waitUntil: 'networkidle' });
 
         // If redirected to a different reports path, try Sales → Appointments via nav
-        if (!page.url().includes('appointments')) {
-            // Try navigating via the sidebar
-            const reportLinks = page.locator('a:has-text("Appointments"), nav a[href*="appointment"]');
-            if ((await reportLinks.count()) > 0) {
-                await reportLinks.first().click();
-                await page.waitForLoadState('networkidle');
-            }
+        if (!page.url().includes('appointment-list')) {
+            console.warn('[FreshaDownloader] Unexpected URL after navigation');
         }
     }
 
     private async setDateRange(page: Page): Promise<void> {
-        console.log('[FreshaDownloader] Setting date range to next 14 days...');
+        console.log('[FreshaDownloader] Setting date range to next 30 days...');
+
+        await page.getByText('Last 30 days').click();
+
+        // const dateRangeButton = page.locator('button:has-text("Last 30 days"), button:has-text("Next 30 days")');
+        // await dateRangeButton.click();
+
+        const dateRangeSelect = await page.locator('select');
+        await dateRangeSelect.waitFor({ state: 'visible', timeout: 5000 });
+        await dateRangeSelect.selectOption({ value: 'next_30_days' });
+
+        // const dateRangeSelect = page.locator('select');
+        // await dateRangeSelect.selectOption({ value: 'next_30_days' });
 
         const today = new Date();
-        const endDate = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+        const endDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
         const formatDate = (d: Date) =>
             `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
@@ -144,51 +151,51 @@ export class FreshaDownloader {
         const todayStr = formatDate(today);
         const endStr = formatDate(endDate);
 
-        // Look for date range picker — Fresha uses various implementations
-        // Try clicking a date range button/dropdown first
-        const dateRangeBtn = page
-            .locator(
-                'button:has-text("Today"), button:has-text("Date"), [data-testid*="date"], .date-range-picker button'
-            )
-            .first();
+        // // Look for date range picker — Fresha uses various implementations
+        // // Try clicking a date range button/dropdown first
+        // const dateRangeBtn = page
+        //     .locator(
+        //         'button:has-text("Last 30 days"), button:has-text("Date"), [data-testid*="date"], .date-range-picker button'
+        //     )
+        //     .first();
 
-        if (await dateRangeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-            await dateRangeBtn.click();
-            await page.waitForTimeout(500);
+        // if (await dateRangeBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+        //     await dateRangeBtn.click();
+        //     await page.waitForTimeout(500);
 
-            // Try selecting "Custom range" option
-            const customRange = page
-                .locator('li:has-text("Custom"), button:has-text("Custom"), option:has-text("Custom")')
-                .first();
-            if (await customRange.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await customRange.click();
-                await page.waitForTimeout(300);
-            }
-        }
+        //     // Try selecting "Custom range" option
+        //     const customRange = page
+        //         .locator('li:has-text("Custom"), button:has-text("Custom"), option:has-text("Custom")')
+        //         .first();
+        //     if (await customRange.isVisible({ timeout: 2000 }).catch(() => false)) {
+        //         await customRange.click();
+        //         await page.waitForTimeout(300);
+        //     }
+        // }
 
-        // Fill in start date input
-        const startInput = page
-            .locator(
-                'input[placeholder*="start" i], input[placeholder*="from" i], input[name*="start" i], input[name*="from" i], input[aria-label*="start" i]'
-            )
-            .first();
+        // // Fill in start date input
+        // const startInput = page
+        //     .locator(
+        //         'input[placeholder*="start" i], input[placeholder*="from" i], input[name*="start" i], input[name*="from" i], input[aria-label*="start" i]'
+        //     )
+        //     .first();
 
-        if (await startInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-            await startInput.click({ clickCount: 3 });
-            await startInput.fill(todayStr);
-        }
+        // if (await startInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+        //     await startInput.click({ clickCount: 3 });
+        //     await startInput.fill(todayStr);
+        // }
 
-        // Fill in end date input
-        const endInput = page
-            .locator(
-                'input[placeholder*="end" i], input[placeholder*="to" i], input[name*="end" i], input[name*="to" i], input[aria-label*="end" i]'
-            )
-            .first();
+        // // Fill in end date input
+        // const endInput = page
+        //     .locator(
+        //         'input[placeholder*="end" i], input[placeholder*="to" i], input[name*="end" i], input[name*="to" i], input[aria-label*="end" i]'
+        //     )
+        //     .first();
 
-        if (await endInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-            await endInput.click({ clickCount: 3 });
-            await endInput.fill(endStr);
-        }
+        // if (await endInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+        //     await endInput.click({ clickCount: 3 });
+        //     await endInput.fill(endStr);
+        // }
 
         // Apply/confirm the date selection
         const applyBtn = page
@@ -208,35 +215,129 @@ export class FreshaDownloader {
         console.log('[FreshaDownloader] Triggering CSV download...');
 
         // Set up download handler BEFORE clicking the button
-        const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
+        const downloadPromise = page.waitForEvent('download', {
+            timeout: 120000,
+        });
+
+        // Click options to expand the drop-down
+        const optionsButton = page.locator('button[data-qa="button-open-dropdown"]').first();
+        if (await optionsButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await optionsButton.click();
+        }
 
         // Find and click the Export/Download button
-        const exportBtn = page
-            .locator(
-                'button:has-text("Export"), button:has-text("Download"), button:has-text("CSV"), a:has-text("Export"), a:has-text("Download CSV"), [data-testid*="export"], [aria-label*="export" i]'
-            )
-            .first();
+        // const exportBtn = page.getByRole('menuitem', { name: /csv|CSV/i }).first();
+        // await exportBtn.waitFor({ state: 'visible', timeout: 1000 });
+        // await exportBtn.click();
 
-        await exportBtn.waitFor({ state: 'visible', timeout: 10000 });
-        await exportBtn.click();
-
-        // If a dropdown appeared (e.g. "Export as CSV" / "Export as Excel"), click CSV
-        const csvOption = page.locator('li:has-text("CSV"), button:has-text("CSV"), a:has-text("CSV")').first();
-        if (await csvOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await csvOption.click();
-        }
+        // Fresha renders CSV as a list item with data-key="csv". Keep this selector strict
+        // so we do not accidentally click the XLSX option directly below it.
+        const csvOption = page.locator('li[data-key="csv"]').first();
+        await csvOption.waitFor({ state: 'visible', timeout: 5000 });
+        await csvOption.scrollIntoViewIfNeeded();
+        await csvOption.click();
 
         // Wait for the download to complete
         const download = await downloadPromise;
         const filename = `appointments_${new Date().toISOString().slice(0, 10)}.csv`;
         const savePath = resolve(EXPORTS_DIR, filename);
 
+        console.log(`[FreshaDownloader] Download event received: ${download.suggestedFilename()}`);
+        console.log(`[FreshaDownloader] Saving download to ${savePath}`);
         await download.saveAs(savePath);
+        this.normalizeCsvToUtf8(savePath);
 
         // Clean up older exports (keep last 5 only)
         this.pruneOldExports(5);
 
         return savePath;
+    }
+
+    private normalizeCsvToUtf8(filePath: string): void {
+        const raw = readFileSync(filePath);
+        if (raw.length === 0) {
+            throw new Error('[FreshaDownloader] Downloaded CSV is empty');
+        }
+
+        // ZIP signatures usually indicate we downloaded Excel/ZIP content, not a plain CSV.
+        if (
+            (raw[0] === 0x50 && raw[1] === 0x4b && raw[2] === 0x03 && raw[3] === 0x04) ||
+            (raw[0] === 0x50 && raw[1] === 0x4b && raw[2] === 0x05 && raw[3] === 0x06) ||
+            (raw[0] === 0x50 && raw[1] === 0x4b && raw[2] === 0x07 && raw[3] === 0x08)
+        ) {
+            throw new Error('[FreshaDownloader] Downloaded file appears to be ZIP/Excel content, not CSV');
+        }
+
+        let text: string;
+
+        // UTF-8 BOM
+        if (raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf) {
+            text = raw.toString('utf8');
+        }
+        // UTF-16 LE BOM
+        else if (raw[0] === 0xff && raw[1] === 0xfe) {
+            text = raw.subarray(2).toString('utf16le');
+        }
+        // UTF-16 BE BOM
+        else if (raw[0] === 0xfe && raw[1] === 0xff) {
+            text = this.decodeUtf16Be(raw.subarray(2));
+        }
+        // UTF-16 LE (no BOM) heuristic
+        else if (this.looksLikeUtf16Le(raw)) {
+            text = raw.toString('utf16le');
+        } else {
+            text = raw.toString('utf8');
+        }
+
+        const normalized = text.replace(/^\uFEFF/, '');
+
+        if (!this.looksLikeCsv(normalized)) {
+            throw new Error('[FreshaDownloader] Downloaded content does not look like CSV text');
+        }
+
+        writeFileSync(filePath, normalized, { encoding: 'utf8' });
+    }
+
+    private decodeUtf16Be(raw: Buffer): string {
+        const evenLength = raw.length - (raw.length % 2);
+        const swapped = Buffer.allocUnsafe(evenLength);
+        for (let i = 0; i < evenLength; i += 2) {
+            swapped[i] = raw[i + 1];
+            swapped[i + 1] = raw[i];
+        }
+        return swapped.toString('utf16le');
+    }
+
+    private looksLikeUtf16Le(raw: Buffer): boolean {
+        const sampleLength = Math.min(raw.length, 512);
+        let oddNuls = 0;
+        let evenNuls = 0;
+
+        for (let i = 0; i < sampleLength; i++) {
+            if (raw[i] === 0x00) {
+                if (i % 2 === 0) {
+                    evenNuls += 1;
+                } else {
+                    oddNuls += 1;
+                }
+            }
+        }
+
+        return oddNuls >= 8 && oddNuls > evenNuls * 3;
+    }
+
+    private looksLikeCsv(text: string): boolean {
+        const lines = text
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0);
+
+        if (lines.length < 2) {
+            return false;
+        }
+
+        // Accept comma, semicolon, or tab-delimited CSV variants.
+        return /,|;|\t/.test(lines[0]);
     }
 
     private pruneOldExports(keepCount: number): void {
