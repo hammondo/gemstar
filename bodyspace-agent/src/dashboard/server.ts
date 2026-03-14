@@ -2,10 +2,13 @@
 // Lightweight Express dashboard for the owner to review, edit, and approve campaigns.
 
 import express, { Request, Response, NextFunction } from "express";
+import { writeFileSync, mkdirSync } from "fs";
+import { resolve } from "path";
 import { settings } from "../config.js";
 import { getCampaignById, getCampaignsByStatus } from "../db.js";
 import { ApprovalWorkflow } from "../workflows/approval.js";
 import { SchedulerAgent } from "../agents/scheduler/agent.js";
+import { FreshaWatcherAgent } from "../agents/fresha-watcher/agent.js";
 import type { Campaign, SocialPost } from "../types.js";
 
 const app = express();
@@ -58,7 +61,7 @@ function layout(title: string, body: string, flash?: string): string {
   <style>${css}</style></head><body>
   <nav class="nav">
     <h1>🌿 BodySpace Marketing Agent</h1>
-    <div><a href="/">Dashboard</a><a href="/schedule">Schedule</a></div>
+    <div><a href="/">Dashboard</a><a href="/fresha-upload">Fresha CSV</a><a href="/schedule">Schedule</a></div>
   </nav>
   <div class="container">
     ${flash ? `<div class="flash">${flash}</div>` : ""}
@@ -251,6 +254,151 @@ app.get("/schedule", requireAuth, (_req, res) => {
     : `<div style="text-align:center;padding:40px;color:#888">No posts scheduled yet</div>`;
 
   res.send(layout("Schedule", `<h2>Publishing Schedule</h2><div class="card">${table}</div>`));
+});
+
+// ── Fresha CSV upload ─────────────────────────────────────────────────────
+
+app.get("/fresha-upload", requireAuth, (_req, res) => {
+  res.send(layout("Fresha CSV Upload", `
+    <h2>Upload Fresha Appointments CSV</h2>
+
+    <div class="card" style="margin-bottom:16px">
+      <h3 style="margin-bottom:10px">How to export from Fresha</h3>
+      <ol style="font-size:14px;line-height:2;padding-left:20px;color:#444">
+        <li>Open <strong>Fresha Dashboard</strong> → <strong>Sales</strong> → <strong>Appointments</strong></li>
+        <li>Set the date range to <strong>next 14 days</strong></li>
+        <li>Filter status to <strong>Booked</strong> (exclude Cancelled, No-show)</li>
+        <li>Click <strong>Export</strong> → <strong>CSV</strong></li>
+        <li>Upload the file below</li>
+      </ol>
+      <p style="font-size:13px;color:#888;margin-top:10px">
+        The agent will count bookings per service, compare to each service's capacity,
+        and set PUSH / HOLD / PAUSE signals to drive campaign planning.
+      </p>
+    </div>
+
+    <div class="card">
+      <form method="POST" action="/fresha-upload" enctype="multipart/form-data">
+        <div style="border:2px dashed #d4b896;border-radius:8px;padding:32px;text-align:center;margin-bottom:16px">
+          <p style="font-size:15px;margin-bottom:12px">📄 Drop your Fresha CSV here or click to select</p>
+          <input type="file" name="csv" accept=".csv" required
+                 style="font-family:Georgia,serif;font-size:14px">
+        </div>
+        <button type="submit" class="btn btn-dark" style="width:100%;padding:12px;font-size:15px">
+          Upload &amp; Analyse Availability →
+        </button>
+      </form>
+    </div>
+  `));
+});
+
+app.post("/fresha-upload", requireAuth, express.raw({ type: "multipart/form-data", limit: "5mb" }), async (req, res) => {
+  // Parse multipart manually (avoid adding multer dependency — keep it simple)
+  try {
+    const contentType = req.headers["content-type"] ?? "";
+    const boundary = contentType.split("boundary=")[1];
+
+    if (!boundary) {
+      res.send(layout("Error", `<div class="card"><p>Invalid upload. Please try again.</p></div>`));
+      return;
+    }
+
+    const body = req.body as Buffer;
+    const bodyStr = body.toString("latin1");
+
+    // Extract CSV content from multipart body
+    const boundaryStr = `--${boundary}`;
+    const parts = bodyStr.split(boundaryStr).filter((p) => p.includes("filename=") && p.includes(".csv"));
+
+    if (parts.length === 0) {
+      res.send(layout("Error", `<div class="card"><p>No CSV file found in upload.</p></div>`));
+      return;
+    }
+
+    const part = parts[0];
+    // Split on double CRLF to get past headers to content
+    const contentStart = part.indexOf("\r\n\r\n");
+    if (contentStart === -1) {
+      res.send(layout("Error", `<div class="card"><p>Could not parse file content.</p></div>`));
+      return;
+    }
+
+    let csvContent = part.slice(contentStart + 4);
+    // Remove trailing boundary/whitespace
+    const endIdx = csvContent.lastIndexOf("\r\n--");
+    if (endIdx !== -1) csvContent = csvContent.slice(0, endIdx);
+
+    // Save to fresha-exports directory
+    const exportsDir = resolve(settings.dataDir, "fresha-exports");
+    mkdirSync(exportsDir, { recursive: true });
+    const filename = `appointments_${new Date().toISOString().slice(0, 10)}.csv`;
+    const savePath = resolve(exportsDir, filename);
+    writeFileSync(savePath, csvContent, "latin1");
+
+    // Parse and compute signals
+    const agent = new FreshaWatcherAgent();
+    const signals = await agent.run();
+
+    // Build results table
+    const rows = Object.values(signals)
+      .sort((a, b) => a.serviceName.localeCompare(b.serviceName))
+      .map((s) => {
+        const badgeClass = s.signal === "push" ? "badge-scheduled" : s.signal === "pause" ? "badge-rejected" : "badge-pending_review";
+        const signalLabel = s.signal === "push" ? "📢 PUSH" : s.signal === "pause" ? "🔴 PAUSE" : "⏸ HOLD";
+        return `<tr>
+          <td style="padding:10px;font-size:14px">${s.serviceName}</td>
+          <td style="padding:10px;font-size:14px;text-align:center">${s.availableSlots}</td>
+          <td style="padding:10px;text-align:center"><span class="badge ${badgeClass}">${signalLabel}</span></td>
+        </tr>`;
+      }).join("");
+
+    const pushCount  = Object.values(signals).filter((s) => s.signal === "push").length;
+    const pauseCount = Object.values(signals).filter((s) => s.signal === "pause").length;
+
+    res.send(layout("Fresha CSV Upload", `
+      <h2>✅ Availability Updated</h2>
+      <div class="card" style="margin-bottom:16px">
+        <p style="font-size:14px">File <strong>${filename}</strong> processed successfully.</p>
+        <p style="font-size:13px;color:#666;margin-top:6px">
+          ${pushCount} service(s) need promotion · ${pauseCount} service(s) fully booked
+        </p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:14px">Availability Signals</h3>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f8f4f0">
+            <th style="padding:10px;text-align:left;font-size:12px">Service</th>
+            <th style="padding:10px;text-align:center;font-size:12px">Available Slots</th>
+            <th style="padding:10px;text-align:center;font-size:12px">Marketing Signal</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <a href="/fresha-upload" class="btn btn-dark">Upload Another CSV</a>
+        <a href="/" class="btn btn-green">Back to Dashboard</a>
+      </div>
+
+      <div class="card" style="margin-top:16px;background:#f8f4f0">
+        <p style="font-size:13px;color:#666">
+          <strong>Next step:</strong> The campaign planner will use these signals when it next runs
+          (Monday 10am AWST), or you can trigger it manually from the server.
+        </p>
+      </div>
+    `));
+
+  } catch (err) {
+    console.error("[Dashboard] CSV upload error:", err);
+    res.send(layout("Error", `
+      <div class="card">
+        <h3>Upload failed</h3>
+        <p style="font-size:14px;margin-top:8px;color:#721c24">${String(err)}</p>
+        <a href="/fresha-upload" class="btn btn-dark" style="margin-top:12px;display:inline-block">Try again</a>
+      </div>
+    `));
+  }
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────

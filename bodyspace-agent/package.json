@@ -9,6 +9,8 @@
     "start": "node dist/orchestrator.js",
     "start:dashboard": "tsx src/dashboard/server.ts",
     "agent:fresha": "tsx src/agents/fresha-watcher/agent.ts",
+    "fresha:download": "tsx src/agents/fresha-watcher/downloader.ts",
+    "playwright:install": "playwright install chromium --with-deps",
     "agent:monitor": "tsx src/agents/monitor/agent.ts",
     "agent:campaign": "tsx src/agents/campaign-planner/agent.ts",
     "mcp:fresha": "node dist/mcp-servers/fresha/index.js",
@@ -17,6 +19,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "playwright": "^1.44.0",
     "@anthropic-ai/sdk": "^0.40.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "better-sqlite3": "^9.4.0",

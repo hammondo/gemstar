@@ -9,3 +9,7 @@ data/trends/
 logs/
 config/google-service-account.json
 *.js.map
+
+
+.DS_Store
+

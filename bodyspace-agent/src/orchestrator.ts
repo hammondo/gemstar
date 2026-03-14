@@ -35,24 +35,44 @@ async function runCampaignPlanner(ownerBrief?: string): Promise<void> {
   // Only generate if there are services needing promotion (or owner explicitly requested)
   const watcher = new FreshaWatcherAgent();
   const signals = watcher.getLatestSignals();
-  const pushCount = Object.values(signals).filter((v) => v.signal === "push").length;
+  const pushCount = Object.values(signals).filter(
+    (v) => v.signal === "push",
+  ).length;
 
   if (pushCount === 0 && !ownerBrief) {
-    console.log("[Orchestrator] Skipping campaign — no PUSH services (all bookings healthy)");
+    console.log(
+      "[Orchestrator] Skipping campaign — no PUSH services (all bookings healthy)",
+    );
     return;
   }
 
   const campaign = await planner.run({ ownerBrief });
   await approval.notifyOwner(campaign);
-  console.log(`[Orchestrator] Campaign '${campaign.name}' ready for owner review`);
+  console.log(
+    `[Orchestrator] Campaign '${campaign.name}' ready for owner review`,
+  );
 }
 
 // ─── CLI ──────────────────────────────────────────────────────────────────
 
+debugger;
+
 const args = process.argv.slice(2);
+const isHelp = args.includes("--help");
 const isOnce = args.includes("--once");
 const agentArg = args[args.indexOf("--agent") + 1];
 const campaignArg = args[args.indexOf("--campaign") + 1];
+
+if (isHelp) {
+  console.log(`
+Usage:
+  npm run dev                          Start scheduler (runs forever)
+  tsx src/orchestrator.ts --once       Run all agents once and exit
+  tsx src/orchestrator.ts --agent fresha-watcher
+  tsx src/orchestrator.ts --campaign "Focus on Mother's Day gift vouchers"
+`);
+  process.exit(0);
+}
 
 if (isOnce) {
   // Run all agents sequentially and exit
@@ -60,17 +80,27 @@ if (isOnce) {
   await runFreshaWatcher();
   await runMonitor();
   await runCampaignPlanner(campaignArg);
-  console.log("\n✅ All agents complete. Check the dashboard for campaigns to review.");
+  console.log(
+    "\n✅ All agents complete. Check the dashboard for campaigns to review.",
+  );
   process.exit(0);
 }
 
 if (agentArg) {
   // Run a specific agent and exit
   switch (agentArg) {
-    case "fresha-watcher": await runFreshaWatcher(); break;
-    case "monitor": await runMonitor(); break;
-    case "campaign-planner": await runCampaignPlanner(campaignArg); break;
-    default: console.error(`Unknown agent: ${agentArg}`); process.exit(1);
+    case "fresha-watcher":
+      await runFreshaWatcher();
+      break;
+    case "monitor":
+      await runMonitor();
+      break;
+    case "campaign-planner":
+      await runCampaignPlanner(campaignArg);
+      break;
+    default:
+      console.error(`Unknown agent: ${agentArg}`);
+      process.exit(1);
   }
   process.exit(0);
 }
