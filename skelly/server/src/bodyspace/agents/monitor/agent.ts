@@ -108,25 +108,13 @@ Today is ${today}.
 
 Research and produce a weekly intelligence brief for BodySpace Recovery Studio (Jandakot, Perth WA).
 
-RESEARCH TASKS:
+RESEARCH TASKS (perform up to 5 focused searches total):
 
-1. Search for recent promotions or new services from Perth wellness competitors:
-   - "wellness studio Cockburn Perth" 
-   - "massage infrared sauna Jandakot Cockburn"
-   - "Float Perth", "O2 Float", any Fresha-listed massage/wellness studios in southern Perth
+1. Search: "wellness studio Cockburn Perth" OR "massage infrared sauna southern Perth" — summarise any competitor promos or new services.
 
-2. Search current wellness trends in Australia:
-   - "infrared sauna benefits trending Australia 2026"
-   - "NormaTec recovery boots trending"
-   - "lymphatic drainage massage Perth"
-   - "holistic healing Reiki Perth"
+2. Search: "infrared sauna lymphatic drainage wellness trends Perth Australia 2026" — identify rising trends relevant to BodySpace.
 
-3. Search Perth seasonal/lifestyle context for ${month}:
-   - FIFO worker roster patterns and wellness needs
-   - Perth sporting events or lifestyle factors this month
-   - Any Australian health awareness campaigns or days in ${month}
-
-4. Search: "wellness studio marketing trends Australia 2026"
+3. Search: "Perth ${month} wellness FIFO lifestyle" — capture seasonal and lifestyle context for this month.
 
 Return ONLY valid JSON matching this exact schema:
 {
@@ -147,7 +135,7 @@ Return ONLY valid JSON matching this exact schema:
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
             system: SYSTEM_PROMPT,
-            tools: [{ name: 'web_search', type: 'web_search_20250305' }] as never,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as never,
             messages: [{ role: 'user', content: prompt }],
         });
 
@@ -165,7 +153,7 @@ Return ONLY valid JSON matching this exact schema:
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
             system: SYSTEM_PROMPT,
-            tools: [{ name: 'web_search', type: 'web_search_20250305' }] as never,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as never,
             messages: [{ role: 'user', content: prompt }],
         });
 
@@ -175,7 +163,8 @@ Return ONLY valid JSON matching this exact schema:
         stream.on('streamEvent', (event) => {
             if (event.type === 'content_block_start' && 'type' in event.content_block) {
                 const blockType = event.content_block.type;
-                if (blockType === 'tool_use' && 'name' in event.content_block) {
+                // Built-in tools (e.g. web_search) emit 'server_tool_use' in newer API versions;
+                if (blockType === 'server_tool_use' && 'name' in event.content_block) {
                     searchCount++;
                     onProgress({
                         type: 'status',
