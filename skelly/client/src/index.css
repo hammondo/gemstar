@@ -1,16 +1,35 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&display=swap");
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
 
-* {
-  box-sizing: border-box;
+@theme {
+  --color-warm-50: #ffffff;
+  --color-warm-100: #F6EEEC;
+  --color-warm-200: #eeddd8;
+  --color-teal-300: #b9eae7;
+  --color-teal-400: #6fcacb;
+  --color-teal-600: #3895a1;
+  --color-teal-700: #00627b;
+  --color-teal-900: #223131;
+  --color-charcoal: #223131;
+  --color-muted: #555555;
+  --color-ok: #6fcacb;
+  --color-warn: #b87333;
+  --color-bad: #c25050;
+  --font-heading: "Poppins", "Arial", sans-serif;
+  --font-body: "Poppins", "Arial", sans-serif;
 }
 
 body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: "Space Grotesk", system-ui, sans-serif;
-  color: #223131;
-  background:
-    radial-gradient(circle at 92% 8%, rgba(15, 95, 99, 0.2), transparent 24%),
-    radial-gradient(circle at 10% 90%, rgba(180, 93, 63, 0.15), transparent 22%),
-    linear-gradient(165deg, #f7efe4 0%, #fbf8f3 100%);
+  font-family: var(--font-body);
+  color: var(--color-charcoal);
+  background-color: var(--color-warm-100);
+}
+
+@keyframes pulse-opacity {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@utility animate-pulse-opacity {
+  animation: pulse-opacity 1.6s ease-in-out infinite;
 }

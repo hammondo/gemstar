@@ -1,4 +1,31 @@
-# React + TypeScript + Vite
+# BodySpace Recovery Studio — Dashboard Client
+
+React 19 + Vite 8 + Tailwind CSS v4 dashboard for the BodySpace social-media agent system.
+
+## Brand Colour Palette
+
+Defined in `src/index.css` via the Tailwind v4 `@theme` block. All values are aligned to [bodyspacerecoverystudio.com.au](https://bodyspacerecoverystudio.com.au).
+
+| Token | Hex | Usage |
+|---|---|---|
+| `warm-50` | `#ffffff` | Input backgrounds |
+| `warm-100` | `#F6EEEC` | Page background (body) |
+| `warm-200` | `#eeddd8` | Borders, dividers |
+| `teal-300` | `#b9eae7` | Light accents, hover tints |
+| `teal-400` | `#6fcacb` | Primary buttons, active row highlights, progress bars |
+| `teal-600` | `#3895a1` | — (available for deep contrast) |
+| `teal-700` | `#00627b` | Headings, hashtag text, dark accent |
+| `charcoal` | `#223131` | Hero header text |
+| `muted` | `#555555` | Secondary / body text |
+| `ok` | `#6fcacb` | Success badges (published, approved) |
+| `warn` | `#b87333` | Warning badges (pending_review, scheduled) |
+| `bad` | `#c25050` | Error badges (rejected) |
+
+Fonts: **Poppins** (400 / 500 / 600 / 700) via Google Fonts, applied as `--font-heading` and `--font-body`.
+
+---
+
+## Vite + React
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

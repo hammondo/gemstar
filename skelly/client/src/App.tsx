@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import ThemeColors from "./ThemeColors";
 import {
   approveCampaign,
   approvePost,
@@ -23,7 +24,20 @@ import {
   type SocialPost,
   type TrendsBrief,
 } from "./api/appApi";
-import "./App.css";
+
+const statusBadge: Record<string, string> = {
+  pending_review: "bg-amber-100 text-amber-800",
+  approved: "bg-emerald-100 text-emerald-800",
+  scheduled: "bg-emerald-100 text-emerald-800",
+  published: "bg-emerald-100 text-emerald-800",
+  rejected: "bg-red-100 text-red-800",
+};
+
+const signalBorder: Record<string, string> = {
+  push: "border-l-4 border-l-ok",
+  hold: "border-l-4 border-l-warn",
+  pause: "border-l-4 border-l-bad",
+};
 
 function App() {
   const [health, setHealth] = useState<{
@@ -44,6 +58,7 @@ function App() {
   const [campaignNotes, setCampaignNotes] = useState("");
   const [postDrafts, setPostDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState<"dashboard" | "theme">("dashboard");
   const [runningAction, setRunningAction] = useState<string | null>(null);
   const [monitorProgress, setMonitorProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -213,57 +228,117 @@ function App() {
     });
   }
 
+  if (page === "theme") {
+    return (
+      <div>
+        <nav className="mx-auto mt-8 flex w-[min(1180px,92vw)] gap-2">
+          <button
+            onClick={() => setPage("dashboard")}
+            className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-medium text-muted shadow-sm hover:bg-warm-100"
+          >
+            ← Dashboard
+          </button>
+        </nav>
+        <ThemeColors />
+      </div>
+    );
+  }
+
   return (
-    <main className="app-shell">
-      <header className="hero">
-        <p className="kicker">BodySpace Ops Console</p>
-        <h1>Campaigns, approvals, and automation in one place</h1>
-        <p>
+    <main className="mx-auto my-8 mb-16 grid w-[min(1180px,92vw)] gap-4">
+      {/* Hero */}
+      <header className="rounded-2xl border border-warm-200 bg-white p-7 shadow-sm">
+        <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-teal-700">
+          BodySpace GemStar
+        </p>
+        <h1 className="m-0 font-heading text-[clamp(1.5rem,2.8vw,2.4rem)] leading-tight text-charcoal">
+          Campaigns, approvals, and automation in one place
+        </h1>
+        <p className="mt-3 max-w-[74ch] text-muted">
           We are currently running{" "}
           <code>{status?.counts.approvedCampaigns}</code> approved campaigns for
           BodySpace Recovery Studio. Use the buttons below to trigger agents on
           demand, or set up cron jobs to run automatically. Click on a pending
           campaign to review and approve posts before they go live.
         </p>
+        <button
+          onClick={() => setPage("theme")}
+          className="mt-4 rounded-lg border border-warm-200 bg-warm-100 px-4 py-2 text-sm font-medium text-teal-700 shadow-sm hover:bg-teal-300"
+        >
+          View Theme Colours
+        </button>
       </header>
 
-      {loading && <p className="loading">Loading BodySpace dashboard...</p>}
-      {error && <p className="error">{error}</p>}
-      {notice && <p className="notice">{notice}</p>}
+      {loading && <p className="text-muted">Loading BodySpace dashboard...</p>}
+      {error && (
+        <p className="rounded-xl border border-red-200 bg-red-100 px-4 py-3 font-semibold text-red-800">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-100 px-4 py-3 font-semibold text-emerald-800">
+          {notice}
+        </p>
+      )}
 
       {!loading && status && health && (
         <>
-          <section className="metrics-grid">
-            <article className="metric-card">
-              <h2>API Health</h2>
-              <p>{health.status}</p>
-              <span>{new Date(health.timestamp).toLocaleString()}</span>
+          {/* Metrics */}
+          <section className="grid grid-cols-4 gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
+            <article className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+              <h2 className="m-0 text-sm font-medium uppercase tracking-wider text-muted">
+                API Health
+              </h2>
+              <p className="my-1 text-xl font-bold text-charcoal">
+                {health.status}
+              </p>
+              <span className="text-sm text-muted">
+                {new Date(health.timestamp).toLocaleString()}
+              </span>
             </article>
-            <article className="metric-card">
-              <h2>Pending Review</h2>
-              <p>{status.counts.pendingReviewCampaigns}</p>
-              <span>campaigns awaiting owner action</span>
+            <article className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+              <h2 className="m-0 text-sm font-medium uppercase tracking-wider text-muted">
+                Pending Review
+              </h2>
+              <p className="my-1 text-xl font-bold text-charcoal">
+                {status.counts.pendingReviewCampaigns}
+              </p>
+              <span className="text-sm text-muted">
+                campaigns awaiting owner action
+              </span>
             </article>
-            <article className="metric-card">
-              <h2>Scheduled Posts</h2>
-              <p>{status.counts.scheduledPosts}</p>
-              <span>queued in Postiz</span>
+            <article className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+              <h2 className="m-0 text-sm font-medium uppercase tracking-wider text-muted">
+                Scheduled Posts
+              </h2>
+              <p className="my-1 text-xl font-bold text-charcoal">
+                {status.counts.scheduledPosts}
+              </p>
+              <span className="text-sm text-muted">queued in Postiz</span>
             </article>
-            <article className="metric-card">
-              <h2>Cron Timezone</h2>
-              <p>{status.timezone}</p>
-              <span>
+            <article className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+              <h2 className="m-0 text-sm font-medium uppercase tracking-wider text-muted">
+                Cron Timezone
+              </h2>
+              <p className="my-1 text-xl font-bold text-charcoal">
+                {status.timezone}
+              </p>
+              <span className="text-sm text-muted">
                 {status.schedules.freshaWatcher} / {status.schedules.monitor} /{" "}
                 {status.schedules.campaignPlanner}
               </span>
             </article>
           </section>
 
-          <section className="panel">
-            <h2>Manual Agent Triggers</h2>
-            <div className="actions-row">
+          {/* Actions */}
+          <section className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 font-heading text-charcoal">
+              Manual Agent Triggers
+            </h2>
+            <div className="mb-3 flex flex-wrap gap-2">
               <button
                 type="button"
+                className="cursor-pointer rounded-lg bg-teal-400 px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={runningAction !== null}
                 onClick={() =>
                   runAction("Run Fresha watcher", runFreshaWatcher)
@@ -273,6 +348,7 @@ function App() {
               </button>
               <button
                 type="button"
+                className="cursor-pointer rounded-lg bg-teal-400 px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={runningAction !== null}
                 onClick={onRunMonitorStream}
               >
@@ -280,6 +356,7 @@ function App() {
               </button>
               <button
                 type="button"
+                className="cursor-pointer rounded-lg bg-teal-400 px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={runningAction !== null}
                 onClick={() =>
                   runAction("Run campaign planner", () =>
@@ -291,6 +368,7 @@ function App() {
               </button>
               <button
                 type="button"
+                className="cursor-pointer rounded-lg bg-teal-400 px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={runningAction !== null}
                 onClick={() =>
                   runAction("Run full pipeline", () =>
@@ -302,6 +380,7 @@ function App() {
               </button>
               <button
                 type="button"
+                className="cursor-pointer rounded-lg bg-teal-400 px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={runningAction !== null}
                 onClick={() =>
                   runAction("Schedule approved campaigns", () =>
@@ -313,6 +392,7 @@ function App() {
               </button>
             </div>
             <textarea
+              className="w-full rounded-lg border border-warm-200 bg-warm-50 p-2 font-[inherit] text-charcoal"
               rows={2}
               placeholder="Optional owner brief for campaign generation"
               value={ownerBrief}
@@ -320,184 +400,29 @@ function App() {
             />
           </section>
 
-          <section className="split-grid">
-            <article className="panel">
-              <h2>Pending Campaigns</h2>
-              {pendingCampaigns.length === 0 && (
-                <p className="muted">No campaigns pending review.</p>
-              )}
-              {pendingCampaigns.map((campaign) => (
-                <button
-                  type="button"
-                  key={campaign.id}
-                  className={`campaign-row ${selectedCampaign?.id === campaign.id ? "active" : ""}`}
-                  onClick={() => void loadCampaign(campaign.id)}
-                >
-                  <strong>{campaign.name}</strong>
-                  <span>{campaign.theme}</span>
-                  <span>{campaign.posts.length} posts</span>
-                </button>
-              ))}
-            </article>
-
-            <article className="panel">
-              <h2>Fresha CSV Import</h2>
-              <input
-                type="file"
-                accept=".csv"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) {
-                    void onImportCsv(file);
-                  }
-                }}
-              />
-              <p className="muted">
-                Upload an appointments CSV export to refresh PUSH/HOLD/PAUSE
-                signals.
-              </p>
-
-              <h3>Current Signals</h3>
-              <div className="signal-list">
-                {Object.values(signals)
-                  .sort((a, b) => a.serviceName.localeCompare(b.serviceName))
-                  .map((signal) => (
-                    <div
-                      key={signal.serviceId}
-                      className={`signal signal-${signal.signal}`}
-                    >
-                      <strong>{signal.serviceName}</strong>
-                      <span>{signal.availableSlots} slots</span>
-                    </div>
-                  ))}
-              </div>
-            </article>
-          </section>
-
-          <section className="panel review-panel">
-            <h2>Campaign Review</h2>
-            {!selectedCampaign && (
-              <p className="muted">Select a campaign to review posts.</p>
-            )}
-            {selectedCampaign && (
-              <>
-                <header className="campaign-header">
-                  <div>
-                    <h3>{selectedCampaign.name}</h3>
-                    <p>{selectedCampaign.theme}</p>
-                  </div>
-                  <span className={`status status-${selectedCampaign.status}`}>
-                    {selectedCampaign.status}
-                  </span>
-                </header>
-
-                <p>{selectedCampaign.description}</p>
-
-                <div className="post-list">
-                  {selectedCampaign.posts
-                    .slice()
-                    .sort((a, b) =>
-                      (a.scheduledFor ?? "").localeCompare(
-                        b.scheduledFor ?? "",
-                      ),
-                    )
-                    .map((post) => (
-                      <article className="post-card" key={post.id}>
-                        <div className="post-meta">
-                          <strong>{post.platform}</strong>
-                          <span>{post.contentPillar}</span>
-                          <span>
-                            {post.scheduledFor?.slice(0, 10) ?? "No date"}
-                          </span>
-                          <span className={`status status-${post.status}`}>
-                            {post.status}
-                          </span>
-                        </div>
-                        <textarea
-                          rows={4}
-                          value={
-                            postDrafts[post.id] ?? post.ownerEdit ?? post.copy
-                          }
-                          onChange={(event) => {
-                            setPostDrafts((current) => ({
-                              ...current,
-                              [post.id]: event.target.value,
-                            }));
-                          }}
-                        />
-                        {post.imageDirection && (
-                          <p className="muted">Image: {post.imageDirection}</p>
-                        )}
-                        <p className="hashtags">
-                          {post.hashtags
-                            .map((tag) => `#${tag.replace(/^#/, "")}`)
-                            .join(" ")}
-                        </p>
-                        <div className="actions-row compact">
-                          <button
-                            type="button"
-                            className="approve"
-                            disabled={runningAction !== null}
-                            onClick={() => void onApprovePost(post)}
-                          >
-                            Approve post
-                          </button>
-                          <button
-                            type="button"
-                            className="reject"
-                            disabled={runningAction !== null}
-                            onClick={() => void onRejectPost(post)}
-                          >
-                            Reject post
-                          </button>
-                        </div>
-                      </article>
-                    ))}
-                </div>
-
-                <textarea
-                  rows={2}
-                  placeholder="Optional campaign-level notes"
-                  value={campaignNotes}
-                  onChange={(event) => setCampaignNotes(event.target.value)}
-                />
-                <div className="actions-row compact">
-                  <button
-                    type="button"
-                    className="approve"
-                    disabled={runningAction !== null}
-                    onClick={() => void onApproveCampaign()}
-                  >
-                    Approve and schedule campaign
-                  </button>
-                  <button
-                    type="button"
-                    className="reject"
-                    disabled={runningAction !== null}
-                    onClick={() => void onRejectCampaign()}
-                  >
-                    Reject campaign
-                  </button>
-                </div>
-              </>
-            )}
-          </section>
-
-          <section className="split-grid">
-            <article className="panel">
-              <h2>Latest Trends Brief</h2>
+          {/* Split: Trends + Queue */}
+          <section className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
+            <article className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-3 font-heading text-charcoal">
+                Latest Trends Brief
+              </h2>
               <button
                 type="button"
+                className="cursor-pointer rounded-lg bg-teal-400 px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={runningAction !== null}
                 onClick={onRunMonitorStream}
               >
                 {runningAction === "Run monitor" ? "Running…" : "Update trends"}
               </button>
               {monitorProgress && (
-                <p className="monitor-progress">{monitorProgress}</p>
+                <p className="my-2 animate-pulse-opacity rounded border-l-3 border-l-teal-400 bg-teal-300/30 px-2 py-1 text-sm font-semibold text-teal-700">
+                  {monitorProgress}
+                </p>
               )}
               {!trends && (
-                <p className="muted">No trends brief has been generated yet.</p>
+                <p className="text-muted">
+                  No trends brief has been generated yet.
+                </p>
               )}
               {trends && (
                 <>
@@ -511,18 +436,23 @@ function App() {
                   <p>
                     <strong>Opportunities:</strong> {trends.opportunities}
                   </p>
-                  <p className="muted">Confidence: {trends.confidence}</p>
+                  <p className="text-muted">Confidence: {trends.confidence}</p>
                 </>
               )}
             </article>
 
-            <article className="panel">
-              <h2>Scheduled Queue Preview</h2>
+            <article className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-3 font-heading text-charcoal">
+                Scheduled Queue Preview
+              </h2>
               {scheduledPosts.length === 0 && (
-                <p className="muted">No scheduled posts yet.</p>
+                <p className="text-muted">No scheduled posts yet.</p>
               )}
               {scheduledPosts.slice(0, 8).map((post) => (
-                <div key={post.id} className="queue-row">
+                <div
+                  key={post.id}
+                  className="grid grid-cols-[106px_88px_1fr] gap-2 border-t border-warm-200 py-2 text-sm max-sm:grid-cols-1"
+                >
                   <strong>
                     {post.scheduledFor?.slice(0, 10) ?? "No date"}
                   </strong>
@@ -531,6 +461,195 @@ function App() {
                 </div>
               ))}
             </article>
+          </section>
+
+          {/* Split: Campaigns + Signals */}
+          <section className="grid grid-cols-2 gap-4 max-lg:grid-cols-1">
+            <article className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-3 font-heading text-charcoal">
+                Pending Campaigns
+              </h2>
+              {pendingCampaigns.length === 0 && (
+                <p className="text-muted">No campaigns pending review.</p>
+              )}
+              {pendingCampaigns.map((campaign) => (
+                <button
+                  type="button"
+                  key={campaign.id}
+                  className={`mb-2 grid w-full cursor-pointer rounded-lg border-none px-4 py-2 text-left transition ${
+                    selectedCampaign?.id === campaign.id
+                      ? "bg-teal-400 text-white"
+                      : "bg-warm-100 text-charcoal"
+                  }`}
+                  onClick={() => void loadCampaign(campaign.id)}
+                >
+                  <strong>{campaign.name}</strong>
+                  <span className="text-sm opacity-80">{campaign.theme}</span>
+                  <span className="text-sm opacity-80">
+                    {campaign.posts.length} posts
+                  </span>
+                </button>
+              ))}
+            </article>
+
+            <article className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+              <h2 className="mb-3 font-heading text-charcoal">
+                Fresha CSV Import
+              </h2>
+              <input
+                type="file"
+                accept=".csv"
+                className="w-full rounded-lg border border-warm-200 bg-warm-50 p-2 font-[inherit] text-charcoal"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    void onImportCsv(file);
+                  }
+                }}
+              />
+              <p className="text-muted">
+                Upload an appointments CSV export to refresh PUSH/HOLD/PAUSE
+                signals.
+              </p>
+
+              <h3>Current Signals</h3>
+              <div className="grid max-h-64 gap-2 overflow-auto">
+                {Object.values(signals)
+                  .sort((a, b) => a.serviceName.localeCompare(b.serviceName))
+                  .map((signal) => (
+                    <div
+                      key={signal.serviceId}
+                      className={`flex justify-between rounded-lg border border-warm-200 bg-warm-100 p-2 ${signalBorder[signal.signal] ?? ""}`}
+                    >
+                      <strong>{signal.serviceName}</strong>
+                      <span>{signal.availableSlots} slots</span>
+                    </div>
+                  ))}
+              </div>
+            </article>
+          </section>
+
+          {/* Campaign Review */}
+          <section className="rounded-xl border border-warm-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-3 font-heading text-charcoal">Campaign Review</h2>
+            {!selectedCampaign && (
+              <p className="text-muted">Select a campaign to review posts.</p>
+            )}
+            {selectedCampaign && (
+              <>
+                <header className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="m-0 text-charcoal">
+                      {selectedCampaign.name}
+                    </h3>
+                    <p className="mt-1 text-muted">{selectedCampaign.theme}</p>
+                  </div>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${statusBadge[selectedCampaign.status] ?? ""}`}
+                  >
+                    {selectedCampaign.status}
+                  </span>
+                </header>
+
+                <p>{selectedCampaign.description}</p>
+
+                <div className="my-3 grid gap-3">
+                  {selectedCampaign.posts
+                    .slice()
+                    .sort((a, b) =>
+                      (a.scheduledFor ?? "").localeCompare(
+                        b.scheduledFor ?? "",
+                      ),
+                    )
+                    .map((post) => (
+                      <article
+                        className="rounded-lg border border-warm-200 bg-warm-50 p-3"
+                        key={post.id}
+                      >
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <strong>{post.platform}</strong>
+                          <span>{post.contentPillar}</span>
+                          <span>
+                            {post.scheduledFor?.slice(0, 10) ?? "No date"}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${statusBadge[post.status] ?? ""}`}
+                          >
+                            {post.status}
+                          </span>
+                        </div>
+                        <textarea
+                          className="w-full rounded-lg border border-warm-200 bg-warm-50 p-2 font-[inherit] text-charcoal"
+                          rows={4}
+                          value={
+                            postDrafts[post.id] ?? post.ownerEdit ?? post.copy
+                          }
+                          onChange={(event) => {
+                            setPostDrafts((current) => ({
+                              ...current,
+                              [post.id]: event.target.value,
+                            }));
+                          }}
+                        />
+                        {post.imageDirection && (
+                          <p className="text-muted">
+                            Image: {post.imageDirection}
+                          </p>
+                        )}
+                        <p className="my-1 text-sm text-teal-700">
+                          {post.hashtags
+                            .map((tag) => `#${tag.replace(/^#/, "")}`)
+                            .join(" ")}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="cursor-pointer rounded-lg bg-ok px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={runningAction !== null}
+                            onClick={() => void onApprovePost(post)}
+                          >
+                            Approve post
+                          </button>
+                          <button
+                            type="button"
+                            className="cursor-pointer rounded-lg bg-bad px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={runningAction !== null}
+                            onClick={() => void onRejectPost(post)}
+                          >
+                            Reject post
+                          </button>
+                        </div>
+                      </article>
+                    ))}
+                </div>
+
+                <textarea
+                  className="w-full rounded-lg border border-warm-200 bg-warm-50 p-2 font-[inherit] text-charcoal"
+                  rows={2}
+                  placeholder="Optional campaign-level notes"
+                  value={campaignNotes}
+                  onChange={(event) => setCampaignNotes(event.target.value)}
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-lg bg-ok px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={runningAction !== null}
+                    onClick={() => void onApproveCampaign()}
+                  >
+                    Approve and schedule campaign
+                  </button>
+                  <button
+                    type="button"
+                    className="cursor-pointer rounded-lg bg-bad px-4 py-2 font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={runningAction !== null}
+                    onClick={() => void onRejectCampaign()}
+                  >
+                    Reject campaign
+                  </button>
+                </div>
+              </>
+            )}
           </section>
         </>
       )}
