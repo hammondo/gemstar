@@ -217,10 +217,13 @@ function App() {
     <main className="app-shell">
       <header className="hero">
         <p className="kicker">BodySpace Ops Console</p>
-        <h1>Campaigns, approvals, and cron-driven automation in one place</h1>
+        <h1>Campaigns, approvals, and automation in one place</h1>
         <p>
-          Server hosts orchestration and scheduling. This client handles human
-          review and manual trigger controls.
+          We are currently running{" "}
+          <code>{status?.counts.approvedCampaigns}</code> approved campaigns for
+          BodySpace Recovery Studio. Use the buttons below to trigger agents on
+          demand, or set up cron jobs to run automatically. Click on a pending
+          campaign to review and approve posts before they go live.
         </p>
       </header>
 
