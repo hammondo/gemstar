@@ -1,35 +1,40 @@
-@import "tailwindcss";
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
+@import 'tailwindcss';
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
 
 @theme {
-  --color-warm-50: #ffffff;
-  --color-warm-100: #F6EEEC;
-  --color-warm-200: #eeddd8;
-  --color-teal-300: #b9eae7;
-  --color-teal-400: #6fcacb;
-  --color-teal-600: #3895a1;
-  --color-teal-700: #00627b;
-  --color-teal-900: #223131;
-  --color-charcoal: #223131;
-  --color-muted: #555555;
-  --color-ok: #6fcacb;
-  --color-warn: #b87333;
-  --color-bad: #c25050;
-  --font-heading: "Poppins", "Arial", sans-serif;
-  --font-body: "Poppins", "Arial", sans-serif;
+    --color-warm-50: #ffffff;
+    --color-warm-100: #f6eeec;
+    --color-warm-200: #eeddd8;
+    --color-teal-300: #b9eae7;
+    --color-teal-400: #6fcacb;
+    --color-teal-600: #3895a1;
+    --color-teal-700: #00627b;
+    --color-teal-900: #223131;
+    --color-charcoal: #223131;
+    --color-muted: #555555;
+    --color-ok: #6fcacb;
+    --color-warn: #b87333;
+    --color-bad: #c25050;
+    --font-heading: 'Poppins', 'Arial', sans-serif;
+    --font-body: 'Poppins', 'Arial', sans-serif;
 }
 
 body {
-  font-family: var(--font-body);
-  color: var(--color-charcoal);
-  background-color: var(--color-warm-100);
+    font-family: var(--font-body);
+    color: var(--color-charcoal);
+    background-color: var(--color-warm-100);
 }
 
 @keyframes pulse-opacity {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
 }
 
 @utility animate-pulse-opacity {
-  animation: pulse-opacity 1.6s ease-in-out infinite;
+    animation: pulse-opacity 1.6s ease-in-out infinite;
 }

@@ -9,9 +9,9 @@ services:
       name: "Relaxation Massage"
       category: "Massage Therapy"
       url: "https://bodyspacerecoverystudio.com.au/relaxation-massage/"
-      weeklyCapacity: 14   # ← UPDATE: realistic slots per week for this service
-      pushThreshold: 8     # >= 8 free slots → PUSH marketing
-      pauseThreshold: 1    # <= 1 free slot  → PAUSE marketing
+      weeklyCapacity: 14 # ← UPDATE: realistic slots per week for this service
+      pushThreshold: 8 # >= 8 free slots → PUSH marketing
+      pauseThreshold: 1 # <= 1 free slot  → PAUSE marketing
       keyBenefits: ["stress relief", "muscle tension", "deep relaxation", "sleep improvement"]
       targetAudience: ["stressed professionals", "self-care seekers", "gift recipients"]
 

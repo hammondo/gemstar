@@ -8,7 +8,8 @@ competitors:
       monitorFor: ["new services", "promotions", "pricing", "social content"]
 
     - name: "Fresha-listed studios Cockburn/Jandakot"
-      searchTerms: ["fresha massage cockburn perth", "fresha wellness jandakot", "fresha infrared sauna perth southern suburbs"]
+      searchTerms:
+        ["fresha massage cockburn perth", "fresha wellness jandakot", "fresha infrared sauna perth southern suburbs"]
       monitorFor: ["new competitors", "review trends", "pricing benchmarks"]
 
     - name: "Perth southern suburbs wellness studios"
