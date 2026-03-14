@@ -14,11 +14,12 @@ import {
   runAll,
   runCampaign,
   runFreshaWatcher,
-  runMonitor,
+  runMonitorStream,
   scheduleCampaign,
   type AvailabilitySignal,
   type BodyspaceStatus,
   type Campaign,
+  type MonitorProgressEvent,
   type SocialPost,
   type TrendsBrief,
 } from "./api/appApi";
@@ -44,6 +45,7 @@ function App() {
   const [postDrafts, setPostDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [runningAction, setRunningAction] = useState<string | null>(null);
+  const [monitorProgress, setMonitorProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -185,6 +187,32 @@ function App() {
     });
   }
 
+  function onRunMonitorStream() {
+    setRunningAction("Run monitor");
+    setError(null);
+    setNotice(null);
+    setMonitorProgress("Connecting...");
+
+    runMonitorStream({
+      onProgress(event: MonitorProgressEvent) {
+        if (event.type === "status" || event.type === "done") {
+          setMonitorProgress(event.message);
+        }
+      },
+      onComplete() {
+        setRunningAction(null);
+        setMonitorProgress(null);
+        setNotice("Run monitor complete");
+        void loadDashboard();
+      },
+      onError(message: string) {
+        setRunningAction(null);
+        setMonitorProgress(null);
+        setError(message);
+      },
+    });
+  }
+
   return (
     <main className="app-shell">
       <header className="hero">
@@ -243,7 +271,7 @@ function App() {
               <button
                 type="button"
                 disabled={runningAction !== null}
-                onClick={() => runAction("Run monitor", runMonitor)}
+                onClick={onRunMonitorStream}
               >
                 Run monitor
               </button>
@@ -455,6 +483,16 @@ function App() {
           <section className="split-grid">
             <article className="panel">
               <h2>Latest Trends Brief</h2>
+              <button
+                type="button"
+                disabled={runningAction !== null}
+                onClick={onRunMonitorStream}
+              >
+                {runningAction === "Run monitor" ? "Running…" : "Update trends"}
+              </button>
+              {monitorProgress && (
+                <p className="monitor-progress">{monitorProgress}</p>
+              )}
               {!trends && (
                 <p className="muted">No trends brief has been generated yet.</p>
               )}

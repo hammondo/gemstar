@@ -3,9 +3,15 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { BodyspaceOrchestrator } from "../bodyspace/orchestrator.js";
 import { FreshaWatcherAgent } from "../bodyspace/agents/fresha-watcher/agent.js";
+import { MonitorAgent } from "../bodyspace/agents/monitor/agent.js";
 import { SchedulerAgent } from "../bodyspace/agents/scheduler/agent.js";
 import { ApprovalWorkflow } from "../bodyspace/workflows/approval.js";
-import { getCampaignById, getCampaignsByStatus, getLatestSignals, getLatestTrendsBrief } from "../bodyspace/db.js";
+import {
+  getCampaignById,
+  getCampaignsByStatus,
+  getLatestSignals,
+  getLatestTrendsBrief,
+} from "../bodyspace/db.js";
 import { settings } from "../bodyspace/config.js";
 import type { Campaign, CampaignStatus } from "../bodyspace/types.js";
 
@@ -26,7 +32,11 @@ function getAllCampaigns(): Campaign[] {
 }
 
 function findCampaignByPostId(postId: string): Campaign | null {
-  return getAllCampaigns().find((campaign) => campaign.posts.some((post) => post.id === postId)) ?? null;
+  return (
+    getAllCampaigns().find((campaign) =>
+      campaign.posts.some((post) => post.id === postId),
+    ) ?? null
+  );
 }
 
 bodyspaceRouter.get("/status", (_req, res) => {
@@ -47,7 +57,10 @@ bodyspaceRouter.get("/status", (_req, res) => {
       approvedCampaigns: approved.length,
       scheduledCampaigns: scheduled.length,
       scheduledPosts: scheduled.reduce((count, campaign) => {
-        return count + campaign.posts.filter((post) => post.status === "scheduled").length;
+        return (
+          count +
+          campaign.posts.filter((post) => post.status === "scheduled").length
+        );
       }, 0),
     },
   });
@@ -95,9 +108,48 @@ bodyspaceRouter.post("/run/monitor", async (_req, res) => {
   }
 });
 
+bodyspaceRouter.get("/run/monitor/stream", (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
+
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  let closed = false;
+  req.on("close", () => {
+    closed = true;
+  });
+
+  const agent = new MonitorAgent();
+  agent
+    .runStreaming((progress) => {
+      if (closed) return;
+      send("progress", progress);
+    })
+    .then(() => {
+      if (!closed) {
+        send("complete", { ok: true });
+        res.end();
+      }
+    })
+    .catch((err) => {
+      if (!closed) {
+        send("error", { message: String(err) });
+        res.end();
+      }
+    });
+});
+
 bodyspaceRouter.post("/run/campaign", async (req, res) => {
   try {
-    const ownerBrief = typeof req.body?.ownerBrief === "string" ? req.body.ownerBrief : undefined;
+    const ownerBrief =
+      typeof req.body?.ownerBrief === "string"
+        ? req.body.ownerBrief
+        : undefined;
     await orchestrator.runCampaignPlanner(ownerBrief);
     res.json({ ok: true });
   } catch (err) {
@@ -107,7 +159,10 @@ bodyspaceRouter.post("/run/campaign", async (req, res) => {
 
 bodyspaceRouter.post("/run/all", async (req, res) => {
   try {
-    const ownerBrief = typeof req.body?.ownerBrief === "string" ? req.body.ownerBrief : undefined;
+    const ownerBrief =
+      typeof req.body?.ownerBrief === "string"
+        ? req.body.ownerBrief
+        : undefined;
     await orchestrator.runAll({ ownerBrief });
     res.json({ ok: true });
   } catch (err) {
@@ -116,7 +171,10 @@ bodyspaceRouter.post("/run/all", async (req, res) => {
 });
 
 bodyspaceRouter.post("/fresha/import", async (req, res) => {
-  const { csvContent, filename } = req.body as { csvContent?: string; filename?: string };
+  const { csvContent, filename } = req.body as {
+    csvContent?: string;
+    filename?: string;
+  };
 
   if (!csvContent || typeof csvContent !== "string") {
     res.status(400).json({ ok: false, error: "csvContent is required" });
@@ -127,9 +185,10 @@ bodyspaceRouter.post("/fresha/import", async (req, res) => {
     const exportsDir = resolve(settings.dataDir, "fresha-exports");
     mkdirSync(exportsDir, { recursive: true });
 
-    const safeName = (filename && filename.endsWith(".csv"))
-      ? filename.replace(/[^a-zA-Z0-9_.-]/g, "_")
-      : `appointments_${new Date().toISOString().slice(0, 10)}.csv`;
+    const safeName =
+      filename && filename.endsWith(".csv")
+        ? filename.replace(/[^a-zA-Z0-9_.-]/g, "_")
+        : `appointments_${new Date().toISOString().slice(0, 10)}.csv`;
 
     const savePath = resolve(exportsDir, safeName);
     writeFileSync(savePath, csvContent, "utf8");
@@ -160,7 +219,8 @@ bodyspaceRouter.post("/posts/:id/approve", (req, res) => {
 bodyspaceRouter.post("/posts/:id/reject", (req, res) => {
   try {
     const postId = req.params.id;
-    const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
+    const reason =
+      typeof req.body?.reason === "string" ? req.body.reason : undefined;
     const approval = new ApprovalWorkflow();
     approval.rejectPost(postId, reason);
 
@@ -174,7 +234,8 @@ bodyspaceRouter.post("/posts/:id/reject", (req, res) => {
 bodyspaceRouter.post("/campaigns/:id/approve", async (req, res) => {
   try {
     const campaignId = req.params.id;
-    const notes = typeof req.body?.notes === "string" ? req.body.notes : undefined;
+    const notes =
+      typeof req.body?.notes === "string" ? req.body.notes : undefined;
     const approval = new ApprovalWorkflow();
     const campaign = approval.approveCampaign(campaignId, notes);
 
@@ -190,7 +251,8 @@ bodyspaceRouter.post("/campaigns/:id/approve", async (req, res) => {
 bodyspaceRouter.post("/campaigns/:id/reject", (req, res) => {
   try {
     const campaignId = req.params.id;
-    const reason = typeof req.body?.reason === "string" ? req.body.reason : undefined;
+    const reason =
+      typeof req.body?.reason === "string" ? req.body.reason : undefined;
     const approval = new ApprovalWorkflow();
     const campaign = approval.rejectCampaign(campaignId, reason);
 
@@ -202,7 +264,10 @@ bodyspaceRouter.post("/campaigns/:id/reject", (req, res) => {
 
 bodyspaceRouter.post("/schedule", async (req, res) => {
   try {
-    const campaignId = typeof req.body?.campaignId === "string" ? req.body.campaignId : undefined;
+    const campaignId =
+      typeof req.body?.campaignId === "string"
+        ? req.body.campaignId
+        : undefined;
     const scheduler = new SchedulerAgent();
     await scheduler.run(campaignId);
 

@@ -1,4 +1,4 @@
-import { fetchJson, postJson } from "./http";
+import { fetchJson, postJson, streamSSE, type SSECallbacks } from "./http";
 
 export type CampaignStatus =
   | "draft"
@@ -138,6 +138,17 @@ export function runFreshaWatcher(): Promise<{ ok: boolean }> {
 
 export function runMonitor(): Promise<{ ok: boolean }> {
   return postJson("/api/bodyspace/run/monitor");
+}
+
+export interface MonitorProgressEvent {
+  type: "status" | "text" | "done" | "error";
+  message: string;
+}
+
+export function runMonitorStream(
+  callbacks: SSECallbacks<MonitorProgressEvent>,
+): () => void {
+  return streamSSE("/api/bodyspace/run/monitor/stream", callbacks);
 }
 
 export function runCampaign(ownerBrief?: string): Promise<{ ok: boolean }> {

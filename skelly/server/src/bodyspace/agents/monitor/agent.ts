@@ -8,6 +8,13 @@ import { settings, getCompetitors } from "../../config.js";
 import { saveTrendsBrief, getLatestTrendsBrief } from "../../db.js";
 import type { TrendsBrief, GeneratedTrendsBrief } from "../../types.js";
 
+export interface MonitorProgressEvent {
+  type: "status" | "text" | "done" | "error";
+  message: string;
+}
+
+export type OnProgress = (event: MonitorProgressEvent) => void;
+
 const SYSTEM_PROMPT = `
 You are a market research specialist for BodySpace Recovery Studio —
 a wellness studio in Jandakot (Cockburn area), Perth, Western Australia.
@@ -50,6 +57,29 @@ export class MonitorAgent {
     const filename = `brief_${new Date().toISOString().slice(0, 10)}.json`;
     writeFileSync(resolve(trendsDir, filename), JSON.stringify(data, null, 2));
 
+    console.log(`[Monitor] Brief saved: ${filename}`);
+    return brief;
+  }
+
+  async runStreaming(onProgress: OnProgress): Promise<TrendsBrief> {
+    console.log("[Monitor] Starting weekly research (streaming)...");
+    onProgress({ type: "status", message: "Building research prompt..." });
+
+    const prompt = this.buildPrompt();
+    onProgress({
+      type: "status",
+      message: "Starting Claude research with web search...",
+    });
+
+    const data = await this.runResearchStreaming(prompt, onProgress);
+    const brief = saveTrendsBrief(data);
+
+    const trendsDir = resolve(settings.dataDir, "trends");
+    mkdirSync(trendsDir, { recursive: true });
+    const filename = `brief_${new Date().toISOString().slice(0, 10)}.json`;
+    writeFileSync(resolve(trendsDir, filename), JSON.stringify(data, null, 2));
+
+    onProgress({ type: "done", message: `Brief saved: ${filename}` });
     console.log(`[Monitor] Brief saved: ${filename}`);
     return brief;
   }
@@ -120,6 +150,57 @@ Return ONLY valid JSON matching this exact schema:
     for (const block of response.content) {
       if (block.type === "text") text += block.text;
     }
+
+    return this.parseJson(text);
+  }
+
+  private async runResearchStreaming(
+    prompt: string,
+    onProgress: OnProgress,
+  ): Promise<GeneratedTrendsBrief> {
+    const stream = this.client.messages.stream({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      system: SYSTEM_PROMPT,
+      tools: [{ name: "web_search", type: "web_search_20250305" }] as never,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    let text = "";
+    let searchCount = 0;
+
+    stream.on("streamEvent", (event) => {
+      if (
+        event.type === "content_block_start" &&
+        "type" in event.content_block
+      ) {
+        const blockType = event.content_block.type;
+        if (blockType === "tool_use" && "name" in event.content_block) {
+          searchCount++;
+          onProgress({
+            type: "status",
+            message: `Web search #${searchCount} in progress...`,
+          });
+        } else if (blockType === "text") {
+          onProgress({
+            type: "status",
+            message: "Generating brief...",
+          });
+        }
+      }
+    });
+
+    stream.on("text", (chunk) => {
+      text += chunk;
+      onProgress({ type: "text", message: chunk });
+    });
+
+    await stream.finalMessage();
+
+    onProgress({
+      type: "status",
+      message: `Research complete — ${searchCount} web searches performed`,
+    });
 
     return this.parseJson(text);
   }
