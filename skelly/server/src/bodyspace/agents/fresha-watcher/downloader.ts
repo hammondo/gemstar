@@ -22,7 +22,7 @@ import { settings } from "../../config.js";
 const FRESHA_EMAIL = process.env.FRESHA_EMAIL ?? "";
 const FRESHA_PASSWORD = process.env.FRESHA_PASSWORD ?? "";
 const EXPORTS_DIR = resolve(settings.dataDir, "fresha-exports");
-const LOGIN_URL = "https://partners.fresha.com/login";
+const LOGIN_URL = "https://partners.fresha.com/users/sign-in";
 const APPOINTMENTS_URL = "https://partners.fresha.com/reports/appointments";
 
 export class FreshaDownloader {
@@ -98,27 +98,34 @@ export class FreshaDownloader {
     console.log("[FreshaDownloader] Logging in...");
     await page.goto(LOGIN_URL, { waitUntil: "networkidle" });
 
-    // Fill email
+    // Step 1: Fill email
     await page.fill(
       'input[type="email"], input[name="email"], input[placeholder*="email" i]',
       FRESHA_EMAIL,
     );
 
-    // Fill password
-    await page.fill(
-      'input[type="password"], input[name="password"]',
-      FRESHA_PASSWORD,
-    );
+    // Step 2: Click Continue to proceed to password step
+    await page.click('button[type="submit"], button:has-text("Continue")');
 
-    // Click login button
+    // Step 3: Wait for password field to appear, then fill it
+    const passwordInput = page.locator(
+      'input[type="password"], input[name="password"]',
+    );
+    await passwordInput.waitFor({ state: "visible", timeout: 10000 });
+    await passwordInput.fill(FRESHA_PASSWORD);
+
+    // Step 4: Click Sign in
     await page.click(
       'button[type="submit"], button:has-text("Log in"), button:has-text("Sign in")',
     );
 
-    // Wait for dashboard to load (URL changes away from /login)
-    await page.waitForURL((url) => !url.toString().includes("/login"), {
-      timeout: 15000,
-    });
+    // Wait for dashboard to load (URL changes away from /sign-in)
+    await page.waitForURL(
+      (url) =>
+        !url.toString().includes("/sign-in") &&
+        !url.toString().includes("/login"),
+      { timeout: 15000 },
+    );
     console.log("[FreshaDownloader] Logged in successfully");
   }
 
