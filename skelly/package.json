@@ -11,7 +11,9 @@
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build",
     "start": "npm --prefix server run start",
-    "start:server": "npm --prefix server run start"
+    "start:server": "npm --prefix server run start",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "keywords": [
     "typescript",
@@ -22,6 +24,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "prettier": "^3.8.1",
+    "prettier-plugin-organize-imports": "^4.3.0",
+    "prettier-plugin-tailwindcss": "^0.7.2"
   }
 }

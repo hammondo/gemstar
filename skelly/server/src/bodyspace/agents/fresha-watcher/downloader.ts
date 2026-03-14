@@ -23,7 +23,9 @@ const FRESHA_EMAIL = process.env.FRESHA_EMAIL ?? "";
 const FRESHA_PASSWORD = process.env.FRESHA_PASSWORD ?? "";
 const EXPORTS_DIR = resolve(settings.dataDir, "fresha-exports");
 const LOGIN_URL = "https://partners.fresha.com/users/sign-in";
-const APPOINTMENTS_URL = "https://partners.fresha.com/reports/appointments";
+const APPOINTMENTS_URL =
+  "https://partners.fresha.com/reports/table/appointment-list";
+
 
 export class FreshaDownloader {
   /**
