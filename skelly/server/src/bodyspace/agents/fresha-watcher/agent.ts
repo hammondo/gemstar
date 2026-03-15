@@ -33,6 +33,8 @@ const SERVICE_NAME_MAP: Record<string, string> = {
     'relaxation massage': 'relaxation_massage',
     'swedish massage': 'relaxation_massage',
     'remedial massage': 'remedial_massage',
+    'Remedial / Sports Massage': 'remedial_massage',
+    'Remedial / Deep Tissue Massage with Tiana ONLY': 'remedial_massage',
     'pregnancy massage': 'pregnancy_massage',
     'postnatal massage': 'pregnancy_massage',
     'natural healing - reiki': 'reiki',

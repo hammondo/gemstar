@@ -35,6 +35,16 @@ services:
       keyBenefits: ["pregnancy discomfort", "swelling relief", "relaxation for mum-to-be"]
       targetAudience: ["pregnant women", "partners buying gifts"]
 
+    - id: lymphatic_drainage_massage
+      name: "Lymphatic Drainage Massage"
+      category: "Massage Therapy"
+      url: "https://bodyspacerecoverystudio.com.au/lymphatic-drainage-massage/"
+      weeklyCapacity: 8
+      pushThreshold: 5
+      pauseThreshold: 1
+      keyBenefits: ["lymphatic flow", "reduced fluid retention", "circulation support", "post-op recovery"]
+      targetAudience: ["post-op clients", "detox seekers", "clients with swelling or fluid retention"]
+
   naturalHealing:
     - id: reiki
       name: "Natural Healing – Reiki"
