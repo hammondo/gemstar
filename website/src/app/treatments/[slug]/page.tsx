@@ -135,7 +135,10 @@ export default async function TreatmentPage({
               </h3>
               <ul className="flex list-none flex-col gap-2">
                 {treatment.benefits.map((b: string, i: number) => (
-                  <li key={i} className="flex items-start gap-2 text-[0.875rem] text-text-muted">
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-[0.875rem] text-text-muted"
+                  >
                     <span className="font-bold text-primary">✓</span>
                     <span>{b}</span>
                   </li>
