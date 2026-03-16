@@ -58,6 +58,13 @@ export const settings = {
     // Base URL this API server is accessible at (used for image URLs sent to Postiz)
     apiBaseUrl: process.env.API_BASE_URL ?? 'http://localhost:3000',
 
+    // Sanity CMS (website blog publishing)
+    sanityProjectId: process.env.SANITY_PROJECT_ID ?? process.env.NEXT_PUBLIC_SANITY_PROJECT_ID ?? '',
+    sanityDataset: process.env.SANITY_DATASET ?? process.env.NEXT_PUBLIC_SANITY_DATASET ?? '',
+    sanityApiVersion: process.env.SANITY_API_VERSION ?? '2024-05-01',
+    sanityToken: process.env.SANITY_API_TOKEN ?? '',
+    sanityBlogAuthor: process.env.SANITY_BLOG_AUTHOR ?? 'BodySpace Team',
+
     // Misc
     logLevel: process.env.LOG_LEVEL ?? 'info',
     nodeEnv: process.env.NODE_ENV ?? 'development',

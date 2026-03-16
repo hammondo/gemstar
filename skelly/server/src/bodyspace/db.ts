@@ -65,6 +65,12 @@ CREATE TABLE IF NOT EXISTS social_posts (
   image_url TEXT,
   image_status TEXT NOT NULL DEFAULT 'needed'
     CHECK(image_status IN ('needed','generating','draft','approved')),
+    sanity_document_id TEXT,
+    sanity_slug TEXT,
+    sanity_sync_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(sanity_sync_status IN ('pending','synced','skipped','failed')),
+    sanity_synced_at TEXT,
+    sanity_sync_error TEXT,
   hashtags TEXT,
   call_to_action TEXT,
   scheduled_for TEXT,
@@ -115,6 +121,11 @@ function runMigrations(db: Database.Database): void {
     const migrations = [
         'ALTER TABLE social_posts ADD COLUMN image_url TEXT',
         "ALTER TABLE social_posts ADD COLUMN image_status TEXT NOT NULL DEFAULT 'needed'",
+        'ALTER TABLE social_posts ADD COLUMN sanity_document_id TEXT',
+        'ALTER TABLE social_posts ADD COLUMN sanity_slug TEXT',
+        "ALTER TABLE social_posts ADD COLUMN sanity_sync_status TEXT NOT NULL DEFAULT 'pending'",
+        'ALTER TABLE social_posts ADD COLUMN sanity_synced_at TEXT',
+        'ALTER TABLE social_posts ADD COLUMN sanity_sync_error TEXT',
     ];
     for (const sql of migrations) {
         try {
@@ -133,6 +144,7 @@ import type {
     CampaignStatus,
     ImageStatus,
     PostStatus,
+    SanitySyncStatus,
     ServiceAvailabilityData,
     SocialPost,
     TrendsBrief,
@@ -377,6 +389,30 @@ export function updatePostImage(postId: string, imageUrl: string, imageStatus: I
     );
 }
 
+export function updatePostSanitySync(
+    postId: string,
+    data: {
+        status: SanitySyncStatus;
+        documentId?: string;
+        slug?: string;
+        syncedAt?: string;
+        error?: string;
+    }
+): void {
+    const db = getDb();
+    db.prepare(
+        `
+    UPDATE social_posts
+    SET sanity_sync_status = ?,
+        sanity_document_id = COALESCE(?, sanity_document_id),
+        sanity_slug = COALESCE(?, sanity_slug),
+        sanity_synced_at = COALESCE(?, sanity_synced_at),
+        sanity_sync_error = ?
+    WHERE id = ?
+  `
+    ).run(data.status, data.documentId ?? null, data.slug ?? null, data.syncedAt ?? null, data.error ?? null, postId);
+}
+
 // ─── Row mappers ──────────────────────────────────────────────────────────
 
 function rowToCampaign(row: Record<string, unknown>, postRows: Array<Record<string, unknown>>): Campaign {
@@ -409,6 +445,11 @@ function rowToPost(row: Record<string, unknown>): SocialPost {
         imageDirection: (row.image_direction as string) ?? '',
         imageUrl: (row.image_url as string | null) ?? undefined,
         imageStatus: ((row.image_status as string | null) ?? 'needed') as SocialPost['imageStatus'],
+        sanityDocumentId: (row.sanity_document_id as string | null) ?? undefined,
+        sanitySlug: (row.sanity_slug as string | null) ?? undefined,
+        sanitySyncStatus: ((row.sanity_sync_status as string | null) ?? 'pending') as SocialPost['sanitySyncStatus'],
+        sanitySyncedAt: (row.sanity_synced_at as string | null) ?? undefined,
+        sanitySyncError: (row.sanity_sync_error as string | null) ?? undefined,
         hashtags: p<string[]>(row.hashtags as string) ?? [],
         callToAction: (row.call_to_action as string) ?? '',
         scheduledFor: row.scheduled_for as string | undefined,

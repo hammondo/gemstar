@@ -12,8 +12,10 @@ import {
     getLatestSignals,
     getLatestTrendsBrief,
     updatePostImage,
+    updatePostSanitySync,
 } from '../bodyspace/db.js';
 import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
+import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 
@@ -40,6 +42,62 @@ function getAllCampaigns(): Campaign[] {
 
 function findCampaignByPostId(postId: string): Campaign | null {
     return getAllCampaigns().find((campaign) => campaign.posts.some((post) => post.id === postId)) ?? null;
+}
+
+async function trySyncApprovedPostToBlog(postId: string): Promise<{
+    attempted: boolean;
+    synced: boolean;
+    reason?: string;
+    documentId?: string;
+    slug?: string;
+}> {
+    const campaign = findCampaignByPostId(postId);
+    const post = campaign?.posts.find((p) => p.id === postId);
+
+    if (!campaign || !post) {
+        updatePostSanitySync(postId, {
+            status: 'failed',
+            error: 'Post not found',
+        });
+        return { attempted: false, synced: false, reason: 'Post not found' };
+    }
+
+    try {
+        const publisher = new SanityBlogPublisher();
+        const result = await publisher.syncApprovedPost(campaign, post);
+
+        if (result.synced) {
+            updatePostSanitySync(postId, {
+                status: 'synced',
+                documentId: result.documentId,
+                slug: result.slug,
+                syncedAt: new Date().toISOString(),
+                error: '',
+            });
+        } else {
+            updatePostSanitySync(postId, {
+                status: 'skipped',
+                error: result.reason ?? 'Sanity sync skipped',
+            });
+        }
+
+        return {
+            attempted: true,
+            ...result,
+        };
+    } catch (err) {
+        const reason = String(err);
+        updatePostSanitySync(postId, {
+            status: 'failed',
+            error: reason,
+        });
+
+        return {
+            attempted: true,
+            synced: false,
+            reason,
+        };
+    }
 }
 
 bodyspaceRouter.get('/status', (_req, res) => {
@@ -196,15 +254,16 @@ bodyspaceRouter.post('/fresha/import', async (req, res) => {
     }
 });
 
-bodyspaceRouter.post('/posts/:id/approve', (req, res) => {
+bodyspaceRouter.post('/posts/:id/approve', async (req, res) => {
     try {
         const postId = req.params.id;
         const copy = typeof req.body?.copy === 'string' ? req.body.copy : undefined;
         const approval = new ApprovalWorkflow();
         approval.approvePost(postId, copy?.trim() || undefined);
 
+        const blogSync = await trySyncApprovedPostToBlog(postId);
         const campaign = findCampaignByPostId(postId);
-        res.json({ ok: true, campaignId: campaign?.id ?? null });
+        res.json({ ok: true, campaignId: campaign?.id ?? null, blogSync });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
@@ -284,7 +343,7 @@ bodyspaceRouter.post('/posts/:id/image', (req, res) => {
 });
 
 // Approve the current image draft so the post becomes schedulable
-bodyspaceRouter.post('/posts/:id/image/approve', (req, res) => {
+bodyspaceRouter.post('/posts/:id/image/approve', async (req, res) => {
     try {
         const postId = req.params.id;
         const campaign = findCampaignByPostId(postId);
@@ -298,7 +357,20 @@ bodyspaceRouter.post('/posts/:id/image/approve', (req, res) => {
             return;
         }
         updatePostImage(postId, post.imageUrl, 'approved');
-        res.json({ ok: true, postId, imageStatus: 'approved' });
+
+        const blogSync = await trySyncApprovedPostToBlog(postId);
+        res.json({ ok: true, postId, imageStatus: 'approved', blogSync });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// Manually sync a post to Sanity blog (useful for retries)
+bodyspaceRouter.post('/posts/:id/blog/sync', async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const result = await trySyncApprovedPostToBlog(postId);
+        res.json({ ok: true, postId, blogSync: result });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

@@ -4,6 +4,7 @@ export type AvailabilitySignal = 'push' | 'hold' | 'pause';
 export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
 export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
 export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
+export type SanitySyncStatus = 'pending' | 'synced' | 'skipped' | 'failed';
 export type Platform = 'instagram' | 'facebook';
 export type PostType = 'feed' | 'story' | 'reel';
 export type ContentPillar = 'education' | 'promotion' | 'community' | 'social_proof' | 'seasonal';
@@ -56,6 +57,11 @@ export interface SocialPost {
     status: PostStatus;
     imageUrl?: string; // publicly accessible URL served by this API
     imageStatus?: ImageStatus;
+    sanityDocumentId?: string;
+    sanitySlug?: string;
+    sanitySyncStatus?: SanitySyncStatus;
+    sanitySyncedAt?: string;
+    sanitySyncError?: string;
     postizPostId?: string;
     rejectionReason?: string;
     createdAt: string;
