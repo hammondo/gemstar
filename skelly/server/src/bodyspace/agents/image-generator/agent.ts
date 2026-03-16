@@ -186,6 +186,8 @@ export class ImageGeneratorAgent {
     private buildPrompt(post: SocialPost, feedback?: string): string {
         const brand = getBrandVoice();
         const studioName = brand.studio.name;
+        const pillarStyle = this.getPillarStyle(post.contentPillar);
+        const formatStyle = this.getFormatStyle(post.postType);
 
         // Brand-consistent visual style prefix
         const stylePrefix = [
@@ -195,7 +197,10 @@ export class ImageGeneratorAgent {
             'Clean whites, earthy neutrals, soft sage greens',
             'Southern Perth Western Australia aesthetic',
             'No text overlays, no logos, no watermarks',
-            'Canon 5D Mark IV quality, shallow depth of field',
+            'Natural high-quality lifestyle photography with authentic human presence',
+            'Avoid stock-photo look and overly polished commercial styling',
+            pillarStyle,
+            formatStyle,
         ].join('. ');
 
         const cleanedFeedback = feedback?.trim();
@@ -203,7 +208,35 @@ export class ImageGeneratorAgent {
             ? `REVISION NOTES FROM OWNER: ${cleanedFeedback}. Apply these notes while preserving brand style and wellness context.`
             : '';
 
-        return `${stylePrefix}. ${post.imageDirection}. ${revisionInstructions} 4K photorealistic, magazine editorial quality`;
+        return `${stylePrefix}. ${post.imageDirection}. ${revisionInstructions} Realistic textures, approachable tone, social-ready composition`;
+    }
+
+    private getPillarStyle(pillar: SocialPost['contentPillar']): string {
+        switch (pillar) {
+            case 'education':
+                return 'Educational visual tone with clear service context and grounded, practical details';
+            case 'promotion':
+                return 'Service-focused composition that feels inviting and premium but still authentic';
+            case 'community':
+                return 'Community and lifestyle feel with candid moments and relatable Perth local energy';
+            case 'social_proof':
+                return 'Client-story mood with warm candid authenticity and trust-building realness';
+            case 'seasonal':
+                return 'Seasonal atmosphere with subtle local cues and balanced, natural colours';
+            default:
+                return 'Balanced wellness lifestyle aesthetic with natural authenticity';
+        }
+    }
+
+    private getFormatStyle(postType: PostType): string {
+        switch (postType) {
+            case 'story':
+            case 'reel':
+                return 'Mobile-first vertical framing with a strong focal subject and uncluttered background';
+            case 'feed':
+            default:
+                return 'Square-friendly composition with clean framing and immediate visual clarity';
+        }
     }
 
     private getAspectRatio(platform: Platform, postType: PostType): string {
