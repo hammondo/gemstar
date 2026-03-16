@@ -76,7 +76,7 @@ export class ImageGeneratorAgent {
 
     // ── Single-post regeneration (called from dashboard) ─────────────────────
 
-    async regenerate(postId: string, campaignId: string): Promise<string> {
+    async regenerate(postId: string, campaignId: string, feedback?: string): Promise<string> {
         const campaign = getCampaignById(campaignId);
         if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
@@ -87,7 +87,7 @@ export class ImageGeneratorAgent {
         mkdirSync(imageDir, { recursive: true });
 
         updatePostImage(postId, '', 'generating');
-        const imageUrl = await this.generateForPost(post, campaignId, imageDir);
+        const imageUrl = await this.generateForPost(post, campaignId, imageDir, feedback);
         updatePostImage(postId, imageUrl, 'draft');
 
         return imageUrl;
@@ -95,7 +95,12 @@ export class ImageGeneratorAgent {
 
     // ── Core generation ──────────────────────────────────────────────────────
 
-    private async generateForPost(post: SocialPost, campaignId: string, imageDir: string): Promise<string> {
+    private async generateForPost(
+        post: SocialPost,
+        campaignId: string,
+        imageDir: string,
+        feedback?: string
+    ): Promise<string> {
         if (this.isMock) {
             return this.getMockUrl(campaignId, post.id);
         }
@@ -104,7 +109,7 @@ export class ImageGeneratorAgent {
             throw new Error('REPLICATE_API_TOKEN is required for image generation');
         }
 
-        const prompt = this.buildPrompt(post);
+        const prompt = this.buildPrompt(post, feedback);
         const aspectRatio = this.getAspectRatio(post.platform, post.postType);
 
         // Use Prefer: wait=60 for synchronous response — no polling needed in most cases
@@ -178,7 +183,7 @@ export class ImageGeneratorAgent {
 
     // ── Prompt construction ──────────────────────────────────────────────────
 
-    private buildPrompt(post: SocialPost): string {
+    private buildPrompt(post: SocialPost, feedback?: string): string {
         const brand = getBrandVoice();
         const studioName = brand.studio.name;
 
@@ -193,7 +198,12 @@ export class ImageGeneratorAgent {
             'Canon 5D Mark IV quality, shallow depth of field',
         ].join('. ');
 
-        return `${stylePrefix}. ${post.imageDirection}. 4K photorealistic, magazine editorial quality`;
+        const cleanedFeedback = feedback?.trim();
+        const revisionInstructions = cleanedFeedback
+            ? `REVISION NOTES FROM OWNER: ${cleanedFeedback}. Apply these notes while preserving brand style and wellness context.`
+            : '';
+
+        return `${stylePrefix}. ${post.imageDirection}. ${revisionInstructions} 4K photorealistic, magazine editorial quality`;
     }
 
     private getAspectRatio(platform: Platform, postType: PostType): string {
