@@ -3,6 +3,7 @@ import ThemeColors from './ThemeColors';
 import {
     approveCampaign,
     approvePost,
+    approvePostImage,
     getBodyspaceStatus,
     getCampaign,
     getCampaigns,
@@ -12,6 +13,7 @@ import {
     importFreshaCsv,
     rejectCampaign,
     rejectPost,
+    regeneratePostImage,
     runAll,
     runCampaign,
     runFreshaWatcher,
@@ -20,6 +22,7 @@ import {
     type AvailabilitySignal,
     type BodyspaceStatus,
     type Campaign,
+    type ImageStatus,
     type MonitorProgressEvent,
     type SocialPost,
     type TrendsBrief,
@@ -53,6 +56,8 @@ function App() {
     const [ownerBrief, setOwnerBrief] = useState('');
     const [campaignNotes, setCampaignNotes] = useState('');
     const [postDrafts, setPostDrafts] = useState<Record<string, string>>({});
+    const [imageFeedback, setImageFeedback] = useState<Record<string, string>>({});
+    const [imageAction, setImageAction] = useState<Record<string, 'generating' | 'approving' | null>>({});
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState<'dashboard' | 'theme'>('dashboard');
     const [runningAction, setRunningAction] = useState<string | null>(null);
@@ -147,6 +152,35 @@ function App() {
                 await loadCampaign(selectedCampaign.id);
             }
         });
+    }
+
+    async function onRegenerateImage(post: SocialPost) {
+        if (!selectedCampaign) return;
+        const feedback = imageFeedback[post.id]?.trim() || undefined;
+        setImageAction((prev) => ({ ...prev, [post.id]: 'generating' }));
+        setError(null);
+        try {
+            await regeneratePostImage(post.id, selectedCampaign.id, feedback);
+            await loadCampaign(selectedCampaign.id);
+            setImageFeedback((prev) => ({ ...prev, [post.id]: '' }));
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Image generation failed');
+        } finally {
+            setImageAction((prev) => ({ ...prev, [post.id]: null }));
+        }
+    }
+
+    async function onApproveImage(post: SocialPost) {
+        setImageAction((prev) => ({ ...prev, [post.id]: 'approving' }));
+        setError(null);
+        try {
+            await approvePostImage(post.id);
+            await loadCampaign(selectedCampaign!.id);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Image approval failed');
+        } finally {
+            setImageAction((prev) => ({ ...prev, [post.id]: null }));
+        }
     }
 
     async function onImportCsv(file: File) {
@@ -505,12 +539,17 @@ function App() {
                                                         }));
                                                     }}
                                                 />
-                                                {post.imageDirection && (
-                                                    <p className="text-muted">Image: {post.imageDirection}</p>
-                                                )}
-                                                <p className="my-1 text-sm text-teal-700">
-                                                    {post.hashtags.map((tag) => `#${tag.replace(/^#/, '')}`).join(' ')}
-                                                </p>
+                                                <PostImagePanel
+                                                    post={post}
+                                                    feedback={imageFeedback[post.id] ?? ''}
+                                                    onFeedbackChange={(val) =>
+                                                        setImageFeedback((prev) => ({ ...prev, [post.id]: val }))
+                                                    }
+                                                    isGenerating={imageAction[post.id] === 'generating'}
+                                                    isApproving={imageAction[post.id] === 'approving'}
+                                                    onRegenerate={() => void onRegenerateImage(post)}
+                                                    onApproveImage={() => void onApproveImage(post)}
+                                                />
                                                 <div className="mt-2 flex flex-wrap gap-2">
                                                     <button
                                                         type="button"
@@ -564,6 +603,97 @@ function App() {
                 </>
             )}
         </main>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// PostImagePanel
+// ---------------------------------------------------------------------------
+
+interface PostImagePanelProps {
+    post: SocialPost;
+    feedback: string;
+    onFeedbackChange: (val: string) => void;
+    isGenerating: boolean;
+    isApproving: boolean;
+    onRegenerate: () => void;
+    onApproveImage: () => void;
+}
+
+const imageBadge: Record<ImageStatus, string> = {
+    needed: 'bg-gray-100 text-gray-600',
+    generating: 'bg-amber-100 text-amber-800',
+    draft: 'bg-sky-100 text-sky-800',
+    approved: 'bg-emerald-100 text-emerald-800',
+};
+
+function PostImagePanel({
+    post,
+    feedback,
+    onFeedbackChange,
+    isGenerating,
+    isApproving,
+    onRegenerate,
+    onApproveImage,
+}: PostImagePanelProps) {
+    const status = post.imageStatus ?? 'needed';
+    const hasImage = Boolean(post.imageUrl);
+
+    return (
+        <div className="border-warm-200 mt-2 rounded-lg border p-3">
+            {/* Status badge + direction hint */}
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-bold tracking-wide uppercase ${imageBadge[status]}`}
+                >
+                    image: {status}
+                </span>
+                {post.imageDirection && (
+                    <span className="text-muted text-xs italic">{post.imageDirection}</span>
+                )}
+            </div>
+
+            {/* Image preview */}
+            {hasImage && (
+                <img
+                    src={post.imageUrl}
+                    alt="Generated post image"
+                    className="mb-2 w-full max-w-sm rounded-lg object-cover"
+                />
+            )}
+
+            {/* Feedback textarea */}
+            <textarea
+                className="border-warm-200 bg-warm-50 text-charcoal mb-2 w-full rounded-lg border p-2 font-[inherit] text-sm"
+                rows={2}
+                placeholder={hasImage ? 'Optional feedback for regeneration…' : 'Optional direction for image generation…'}
+                value={feedback}
+                onChange={(e) => onFeedbackChange(e.target.value)}
+                disabled={isGenerating || isApproving}
+            />
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    className="cursor-pointer rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={isGenerating || isApproving || status === 'generating'}
+                    onClick={onRegenerate}
+                >
+                    {isGenerating ? 'Generating…' : hasImage ? 'Regenerate image' : 'Generate image'}
+                </button>
+                {status === 'draft' && (
+                    <button
+                        type="button"
+                        className="bg-ok cursor-pointer rounded-lg px-3 py-1.5 text-sm font-bold text-white transition hover:-translate-y-px hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={isGenerating || isApproving}
+                        onClick={onApproveImage}
+                    >
+                        {isApproving ? 'Approving…' : 'Approve image'}
+                    </button>
+                )}
+            </div>
+        </div>
     );
 }
 
