@@ -51,6 +51,13 @@ export const settings = {
     availabilityPushThreshold: envInt('AVAILABILITY_PUSH_THRESHOLD', 8),
     availabilityPauseThreshold: envInt('AVAILABILITY_PAUSE_THRESHOLD', 1),
 
+    // Image generation (Replicate — FLUX Schnell)
+    replicateApiToken: process.env.REPLICATE_API_TOKEN ?? '',
+    mockImageGeneration: process.env.MOCK_IMAGE_GENERATION === 'true',
+
+    // Base URL this API server is accessible at (used for image URLs sent to Postiz)
+    apiBaseUrl: process.env.API_BASE_URL ?? 'http://localhost:3000',
+
     // Misc
     logLevel: process.env.LOG_LEVEL ?? 'info',
     nodeEnv: process.env.NODE_ENV ?? 'development',

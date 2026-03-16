@@ -1,17 +1,29 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { FreshaWatcherAgent } from '../bodyspace/agents/fresha-watcher/agent.js';
+import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.js';
 import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
 import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
 import { settings } from '../bodyspace/config.js';
-import { getCampaignById, getCampaignsByStatus, getLatestSignals, getLatestTrendsBrief } from '../bodyspace/db.js';
+import {
+    getCampaignById,
+    getCampaignsByStatus,
+    getLatestSignals,
+    getLatestTrendsBrief,
+    updatePostImage,
+} from '../bodyspace/db.js';
 import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 
 const bodyspaceRouter = Router();
 const orchestrator = new BodyspaceOrchestrator();
+
+// Serve locally stored generated images
+const imagesDir = resolve(settings.dataDir, 'images');
+mkdirSync(imagesDir, { recursive: true });
+bodyspaceRouter.use('/images', express.static(imagesDir));
 
 const campaignStatuses: CampaignStatus[] = [
     'draft',
@@ -248,6 +260,81 @@ bodyspaceRouter.post('/schedule', async (req, res) => {
         await scheduler.run(campaignId);
 
         res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// ── Image management ────────────────────────────────────────────────────────
+
+// Set image URL manually (owner pastes a URL or uploads via external tool)
+bodyspaceRouter.post('/posts/:id/image', (req, res) => {
+    try {
+        const postId = req.params.id;
+        const imageUrl = typeof req.body?.imageUrl === 'string' ? req.body.imageUrl.trim() : undefined;
+        if (!imageUrl) {
+            res.status(400).json({ ok: false, error: 'imageUrl is required' });
+            return;
+        }
+        updatePostImage(postId, imageUrl, 'draft');
+        res.json({ ok: true, postId, imageUrl, imageStatus: 'draft' });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// Approve the current image draft so the post becomes schedulable
+bodyspaceRouter.post('/posts/:id/image/approve', (req, res) => {
+    try {
+        const postId = req.params.id;
+        const campaign = findCampaignByPostId(postId);
+        const post = campaign?.posts.find((p) => p.id === postId);
+        if (!post) {
+            res.status(404).json({ ok: false, error: 'Post not found' });
+            return;
+        }
+        if (!post.imageUrl) {
+            res.status(400).json({ ok: false, error: 'No image to approve — generate or set one first' });
+            return;
+        }
+        updatePostImage(postId, post.imageUrl, 'approved');
+        res.json({ ok: true, postId, imageStatus: 'approved' });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// Regenerate the AI image for a single post
+bodyspaceRouter.post('/posts/:id/image/regenerate', async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
+        if (!campaignId) {
+            res.status(400).json({ ok: false, error: 'campaignId is required' });
+            return;
+        }
+        const agent = new ImageGeneratorAgent();
+        const imageUrl = await agent.regenerate(postId, campaignId);
+        res.json({ ok: true, postId, imageUrl, imageStatus: 'draft' });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// Run image generation for a whole campaign
+bodyspaceRouter.post('/run/image-generator', async (req, res) => {
+    try {
+        const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
+        if (!campaignId) {
+            res.status(400).json({ ok: false, error: 'campaignId is required' });
+            return;
+        }
+        const agent = new ImageGeneratorAgent();
+        // Run async and return immediately — generation takes time
+        void agent.run(campaignId).catch((err) => {
+            console.error('[Route] Image generator error:', err);
+        });
+        res.json({ ok: true, message: 'Image generation started', campaignId });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

@@ -32,7 +32,15 @@ export class SchedulerAgent {
     private async scheduleCampaign(campaign: Campaign): Promise<void> {
         console.log(`[Scheduler] Scheduling '${campaign.name}'...`);
 
-        const approvedPosts = campaign.posts.filter((p) => p.status === 'approved');
+        const approvedPosts = campaign.posts.filter((p) => p.status === 'approved' && p.imageStatus === 'approved');
+
+        const imagePending = campaign.posts.filter((p) => p.status === 'approved' && p.imageStatus !== 'approved');
+        if (imagePending.length > 0) {
+            console.warn(
+                `[Scheduler] Skipping ${imagePending.length} post(s) — image not yet approved (imageStatus: ${[...new Set(imagePending.map((p) => p.imageStatus))].join(', ')})`
+            );
+        }
+
         let success = 0;
         let failed = 0;
 
@@ -69,7 +77,13 @@ export class SchedulerAgent {
         const body = {
             type: 'post',
             date: post.scheduledFor,
-            value: [{ content: fullContent, id: accountId }],
+            value: [
+                {
+                    content: fullContent,
+                    id: accountId,
+                    ...(post.imageUrl ? { media: [{ url: post.imageUrl }] } : {}),
+                },
+            ],
         };
 
         const response = await fetch(`${this.baseUrl}/api/posts`, {

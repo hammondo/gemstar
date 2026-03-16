@@ -3,6 +3,7 @@
 export type AvailabilitySignal = 'push' | 'hold' | 'pause';
 export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
 export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
+export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
 export type Platform = 'instagram' | 'facebook';
 export type PostType = 'feed' | 'story' | 'reel';
 export type ContentPillar = 'education' | 'promotion' | 'community' | 'social_proof' | 'seasonal';
@@ -53,6 +54,8 @@ export interface SocialPost {
     callToAction: string;
     scheduledFor?: string; // ISO 8601 with AWST offset
     status: PostStatus;
+    imageUrl?: string; // publicly accessible URL served by this API
+    imageStatus?: ImageStatus;
     postizPostId?: string;
     rejectionReason?: string;
     createdAt: string;

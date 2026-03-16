@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { CampaignPlannerAgent } from './agents/campaign-planner/agent.js';
 import { FreshaWatcherAgent } from './agents/fresha-watcher/agent.js';
+import { ImageGeneratorAgent } from './agents/image-generator/agent.js';
 import { MonitorAgent } from './agents/monitor/agent.js';
 import { settings } from './config.js';
 import { ApprovalWorkflow } from './workflows/approval.js';
@@ -39,6 +40,13 @@ export class BodyspaceOrchestrator {
         const campaign = await planner.run({ ownerBrief });
         await approval.notifyOwner(campaign);
         console.log(`[Orchestrator] Campaign '${campaign.name}' ready for owner review`);
+
+        // Fire image generation in the background — owner sees notification immediately
+        // and images arrive as drafts while they're reviewing the copy
+        const imageGen = new ImageGeneratorAgent();
+        void imageGen.run(campaign.id).catch((err) => {
+            console.error('[Orchestrator] Image generation failed:', err);
+        });
     }
 
     async runAll(options: RunAllOptions = {}): Promise<void> {

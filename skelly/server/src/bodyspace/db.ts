@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS social_posts (
   copy TEXT NOT NULL,
   owner_edit TEXT,
   image_direction TEXT,
+  image_url TEXT,
+  image_status TEXT NOT NULL DEFAULT 'needed'
+    CHECK(image_status IN ('needed','generating','draft','approved')),
   hashtags TEXT,
   call_to_action TEXT,
   scheduled_for TEXT,
@@ -102,8 +105,24 @@ export function getDb(): Database.Database {
     _db.pragma('journal_mode = WAL');
     _db.pragma('foreign_keys = ON');
     _db.exec(SCHEMA);
+    runMigrations(_db);
 
     return _db;
+}
+
+function runMigrations(db: Database.Database): void {
+    // Safe additive migrations — swallow errors when column already exists
+    const migrations = [
+        'ALTER TABLE social_posts ADD COLUMN image_url TEXT',
+        "ALTER TABLE social_posts ADD COLUMN image_status TEXT NOT NULL DEFAULT 'needed'",
+    ];
+    for (const sql of migrations) {
+        try {
+            db.exec(sql);
+        } catch {
+            // Column already exists — expected on existing databases
+        }
+    }
 }
 
 // ─── Typed helpers ────────────────────────────────────────────────────────
@@ -112,6 +131,7 @@ import { randomUUID } from 'crypto';
 import type {
     Campaign,
     CampaignStatus,
+    ImageStatus,
     PostStatus,
     ServiceAvailabilityData,
     SocialPost,
@@ -348,6 +368,15 @@ export function updatePostStatus(
     ).run(status, extra.ownerEdit ?? null, extra.rejectionReason ?? null, extra.postizPostId ?? null, postId);
 }
 
+export function updatePostImage(postId: string, imageUrl: string, imageStatus: ImageStatus): void {
+    const db = getDb();
+    db.prepare(`UPDATE social_posts SET image_url = ?, image_status = ? WHERE id = ?`).run(
+        imageUrl || null,
+        imageStatus,
+        postId
+    );
+}
+
 // ─── Row mappers ──────────────────────────────────────────────────────────
 
 function rowToCampaign(row: Record<string, unknown>, postRows: Array<Record<string, unknown>>): Campaign {
@@ -378,6 +407,8 @@ function rowToPost(row: Record<string, unknown>): SocialPost {
         copy: row.copy as string,
         ownerEdit: row.owner_edit as string | undefined,
         imageDirection: (row.image_direction as string) ?? '',
+        imageUrl: (row.image_url as string | null) ?? undefined,
+        imageStatus: ((row.image_status as string | null) ?? 'needed') as SocialPost['imageStatus'],
         hashtags: p<string[]>(row.hashtags as string) ?? [],
         callToAction: (row.call_to_action as string) ?? '',
         scheduledFor: row.scheduled_for as string | undefined,
