@@ -7,6 +7,7 @@ import { resolve } from 'path';
 import { settings } from '../../config.js';
 import { getLatestTrendsBrief, saveTrendsBrief } from '../../db.js';
 import type { GeneratedTrendsBrief, TrendsBrief } from '../../types.js';
+import { getAgentLogger } from '../../utils/logger.js';
 
 export interface MonitorProgressEvent {
     type: 'status' | 'text' | 'done' | 'error';
@@ -37,10 +38,11 @@ Output ONLY valid JSON — no preamble, no markdown fences.
 
 export class MonitorAgent {
     private client: Anthropic | null;
+    private readonly log = getAgentLogger('Monitor');
 
     constructor() {
         if (settings.mockAnthropic) {
-            console.log('[Monitor] Running in MOCK mode');
+            this.log.info('Running in mock mode');
             this.client = null;
         } else {
             if (!settings.anthropicApiKey) {
@@ -51,7 +53,7 @@ export class MonitorAgent {
     }
 
     async run(): Promise<TrendsBrief> {
-        console.log('[Monitor] Starting weekly research...');
+        this.log.info('Starting weekly research');
         const data = settings.mockAnthropic ? this.getMockBrief() : await this.runResearch(this.buildPrompt());
         const brief = saveTrendsBrief(data);
 
@@ -61,12 +63,12 @@ export class MonitorAgent {
         const filename = `brief_${new Date().toISOString().slice(0, 10)}.json`;
         writeFileSync(resolve(trendsDir, filename), JSON.stringify(data, null, 2));
 
-        console.log(`[Monitor] Brief saved: ${filename}`);
+        this.log.info({ filename }, 'Brief saved');
         return brief;
     }
 
     async runStreaming(onProgress: OnProgress): Promise<TrendsBrief> {
-        console.log('[Monitor] Starting weekly research (streaming)...');
+        this.log.info('Starting weekly research (streaming)');
         onProgress({ type: 'status', message: 'Building research prompt...' });
 
         const prompt = this.buildPrompt();
@@ -86,7 +88,7 @@ export class MonitorAgent {
         writeFileSync(resolve(trendsDir, filename), JSON.stringify(data, null, 2));
 
         onProgress({ type: 'done', message: `Brief saved: ${filename}` });
-        console.log(`[Monitor] Brief saved: ${filename}`);
+        this.log.info({ filename }, 'Brief saved');
         return brief;
     }
 
@@ -131,6 +133,18 @@ Return ONLY valid JSON matching this exact schema:
     }
 
     private async runResearch(prompt: string): Promise<GeneratedTrendsBrief> {
+        const startedAt = Date.now();
+        this.log.info(
+            {
+                event: 'outbound.request',
+                system: 'anthropic',
+                operation: 'messages.create',
+                model: 'claude-sonnet-4-20250514',
+                promptBytes: Buffer.byteLength(prompt),
+            },
+            'Outbound request started'
+        );
+
         const response = await this.client!.messages.create({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
@@ -138,6 +152,17 @@ Return ONLY valid JSON matching this exact schema:
             tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as never,
             messages: [{ role: 'user', content: prompt }],
         });
+
+        this.log.info(
+            {
+                event: 'outbound.response',
+                system: 'anthropic',
+                operation: 'messages.create',
+                durationMs: Date.now() - startedAt,
+                stopReason: response.stop_reason,
+            },
+            'Outbound response received'
+        );
 
         // Extract text from response (may include tool_use blocks from web search)
         let text = '';
@@ -149,6 +174,18 @@ Return ONLY valid JSON matching this exact schema:
     }
 
     private async runResearchStreaming(prompt: string, onProgress: OnProgress): Promise<GeneratedTrendsBrief> {
+        const startedAt = Date.now();
+        this.log.info(
+            {
+                event: 'outbound.request',
+                system: 'anthropic',
+                operation: 'messages.stream',
+                model: 'claude-sonnet-4-20250514',
+                promptBytes: Buffer.byteLength(prompt),
+            },
+            'Outbound request started'
+        );
+
         const stream = this.client!.messages.stream({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
@@ -186,6 +223,16 @@ Return ONLY valid JSON matching this exact schema:
 
         await stream.finalMessage();
 
+        this.log.info(
+            {
+                event: 'outbound.response',
+                system: 'anthropic',
+                operation: 'messages.stream',
+                durationMs: Date.now() - startedAt,
+            },
+            'Outbound response received'
+        );
+
         onProgress({
             type: 'status',
             message: `Research complete — ${searchCount} web searches performed`,
@@ -205,7 +252,7 @@ Return ONLY valid JSON matching this exact schema:
         try {
             return JSON.parse(clean) as GeneratedTrendsBrief;
         } catch {
-            console.error('[Monitor] Failed to parse JSON response, using fallback');
+            this.log.error('Failed to parse JSON response, using fallback');
             return {
                 weekOf: new Date().toISOString(),
                 competitorSummary: text.slice(0, 500),

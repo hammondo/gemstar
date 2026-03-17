@@ -1,5 +1,7 @@
 import { settings } from '../config.js';
 import type { Campaign, SocialPost } from '../types.js';
+import { fetchWithLogging } from '../utils/http.js';
+import { getAgentLogger } from '../utils/logger.js';
 
 interface SanityAsset {
     _id: string;
@@ -18,6 +20,7 @@ export class SanityBlogPublisher {
     private readonly dataset = settings.sanityDataset;
     private readonly apiVersion = settings.sanityApiVersion;
     private readonly token = settings.sanityToken;
+    private readonly log = getAgentLogger('SanityBlogPublisher');
 
     isConfigured(): boolean {
         return Boolean(this.projectId && this.dataset && this.token);
@@ -95,7 +98,11 @@ export class SanityBlogPublisher {
     }
 
     private async downloadImage(url: string): Promise<ArrayBuffer> {
-        const res = await fetch(url);
+        const res = await fetchWithLogging(this.log, url, undefined, {
+            system: 'sanity',
+            operation: 'download_source_image',
+            postId: undefined,
+        });
         if (!res.ok) {
             throw new Error(`Failed to download image for Sanity upload (${res.status})`);
         }
@@ -104,14 +111,19 @@ export class SanityBlogPublisher {
 
     private async uploadImageAsset(bytes: ArrayBuffer, filename: string): Promise<SanityAsset> {
         const url = `https://${this.projectId}.api.sanity.io/v${this.apiVersion}/assets/images/${this.dataset}?filename=${encodeURIComponent(filename)}`;
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${this.token}`,
-                'Content-Type': 'image/webp',
+        const res = await fetchWithLogging(
+            this.log,
+            url,
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${this.token}`,
+                    'Content-Type': 'image/webp',
+                },
+                body: bytes,
             },
-            body: bytes,
-        });
+            { system: 'sanity', operation: 'upload_image_asset' }
+        );
 
         if (!res.ok) {
             const text = await res.text();
@@ -123,14 +135,19 @@ export class SanityBlogPublisher {
 
     private async mutate(mutations: Array<Record<string, unknown>>): Promise<void> {
         const url = `https://${this.projectId}.api.sanity.io/v${this.apiVersion}/data/mutate/${this.dataset}`;
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${this.token}`,
-                'Content-Type': 'application/json',
+        const res = await fetchWithLogging(
+            this.log,
+            url,
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${this.token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ mutations }),
             },
-            body: JSON.stringify({ mutations }),
-        });
+            { system: 'sanity', operation: 'mutate' }
+        );
 
         if (!res.ok) {
             const text = await res.text();

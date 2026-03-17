@@ -8,6 +8,8 @@ import { resolve } from 'path';
 import { getBrandVoice, settings } from '../../config.js';
 import { getCampaignById, updatePostImage } from '../../db.js';
 import type { Platform, PostType, SocialPost } from '../../types.js';
+import { fetchWithLogging } from '../../utils/http.js';
+import { getAgentLogger } from '../../utils/logger.js';
 
 interface ReplicatePrediction {
     id: string;
@@ -24,13 +26,14 @@ function sleep(ms: number): Promise<void> {
 export class ImageGeneratorAgent {
     private readonly isMock: boolean;
     private readonly token: string;
+    private readonly log = getAgentLogger('ImageGenerator');
 
     constructor() {
         this.isMock = settings.mockImageGeneration;
         this.token = settings.replicateApiToken;
 
         if (!this.isMock && !this.token) {
-            console.warn('[ImageGenerator] REPLICATE_API_TOKEN not set — images will not be generated');
+            this.log.warn('REPLICATE_API_TOKEN not set — images will not be generated');
         }
     }
 
@@ -45,11 +48,11 @@ export class ImageGeneratorAgent {
         );
 
         if (pending.length === 0) {
-            console.log('[ImageGenerator] No posts need images');
+            this.log.info({ campaignId }, 'No posts need images');
             return;
         }
 
-        console.log(`[ImageGenerator] Generating ${pending.length} images for '${campaign.name}'`);
+        this.log.info({ campaignId, campaignName: campaign.name, count: pending.length }, 'Starting image generation');
 
         const imageDir = resolve(settings.dataDir, 'images', campaignId);
         mkdirSync(imageDir, { recursive: true });
@@ -63,20 +66,28 @@ export class ImageGeneratorAgent {
                 const imageUrl = await this.generateForPost(post, campaignId, imageDir);
                 updatePostImage(post.id, imageUrl, 'draft');
                 success++;
-                console.log(`[ImageGenerator] ✓ ${post.platform}/${post.postType} post ${post.id.slice(0, 8)}`);
+                this.log.info(
+                    { campaignId, postId: post.id, platform: post.platform, postType: post.postType },
+                    'Image generated'
+                );
             } catch (err) {
                 failed++;
                 updatePostImage(post.id, '', 'needed');
-                console.error(`[ImageGenerator] ✗ Post ${post.id.slice(0, 8)}: ${String(err)}`);
+                this.log.error({ campaignId, postId: post.id, error: String(err) }, 'Image generation failed');
             }
         }
 
-        console.log(`[ImageGenerator] Complete: ${success} generated, ${failed} failed`);
+        this.log.info({ campaignId, success, failed }, 'Image generation complete');
     }
 
     // ── Single-post regeneration (called from dashboard) ─────────────────────
 
-    async regenerate(postId: string, campaignId: string, feedback?: string): Promise<string> {
+    async regenerate(
+        postId: string,
+        campaignId: string,
+        feedback?: string,
+        referenceImageUrl?: string
+    ): Promise<string> {
         const campaign = getCampaignById(campaignId);
         if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
@@ -86,11 +97,16 @@ export class ImageGeneratorAgent {
         const imageDir = resolve(settings.dataDir, 'images', campaignId);
         mkdirSync(imageDir, { recursive: true });
 
-        updatePostImage(postId, '', 'generating');
-        const imageUrl = await this.generateForPost(post, campaignId, imageDir, feedback);
-        updatePostImage(postId, imageUrl, 'draft');
-
-        return imageUrl;
+        updatePostImage(postId, post.imageUrl ?? '', 'generating');
+        try {
+            const imageUrl = await this.generateForPost(post, campaignId, imageDir, feedback, referenceImageUrl);
+            updatePostImage(postId, imageUrl, 'draft');
+            return imageUrl;
+        } catch (err) {
+            // Restore to 'needed' so the owner can retry — never leave stuck at 'generating'
+            updatePostImage(postId, post.imageUrl ?? '', 'needed');
+            throw err;
+        }
     }
 
     // ── Core generation ──────────────────────────────────────────────────────
@@ -99,7 +115,8 @@ export class ImageGeneratorAgent {
         post: SocialPost,
         campaignId: string,
         imageDir: string,
-        feedback?: string
+        feedback?: string,
+        referenceImageUrl?: string
     ): Promise<string> {
         if (this.isMock) {
             return this.getMockUrl(campaignId, post.id);
@@ -109,27 +126,45 @@ export class ImageGeneratorAgent {
             throw new Error('REPLICATE_API_TOKEN is required for image generation');
         }
 
-        const prompt = this.buildPrompt(post, feedback);
+        const prompt = this.buildPrompt(post, feedback, referenceImageUrl);
         const aspectRatio = this.getAspectRatio(post.platform, post.postType);
 
+        // When a reference image is supplied, use FLUX Dev with a high prompt strength
+        // so the linked image acts as influence (object/material cues), not a direct remix.
+        // Otherwise fall back to the faster FLUX Schnell text-to-image model.
+        const useImgToImg = Boolean(referenceImageUrl);
+        const modelPath = useImgToImg ? 'black-forest-labs/flux-dev' : 'black-forest-labs/flux-schnell';
+
+        const input: Record<string, unknown> = {
+            prompt,
+            aspect_ratio: aspectRatio,
+            num_outputs: 1,
+            output_format: 'webp',
+            output_quality: 90,
+        };
+
+        if (useImgToImg) {
+            input.image = referenceImageUrl;
+            // Keep output mostly prompt-led while borrowing object design/style cues.
+            input.prompt_strength = 0.92;
+        }
+
         // Use Prefer: wait=60 for synchronous response — no polling needed in most cases
-        const res = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${this.token}`,
-                'Content-Type': 'application/json',
-                Prefer: 'wait=60',
-            },
-            body: JSON.stringify({
-                input: {
-                    prompt,
-                    aspect_ratio: aspectRatio,
-                    num_outputs: 1,
-                    output_format: 'webp',
-                    output_quality: 90,
+        const replicateUrl = `https://api.replicate.com/v1/models/${modelPath}/predictions`;
+        const res = await fetchWithLogging(
+            this.log,
+            replicateUrl,
+            {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${this.token}`,
+                    'Content-Type': 'application/json',
+                    Prefer: 'wait=60',
                 },
-            }),
-        });
+                body: JSON.stringify({ input }),
+            },
+            { system: 'replicate', operation: 'create_prediction', campaignId, postId: post.id }
+        );
 
         if (!res.ok) {
             const text = await res.text();
@@ -162,9 +197,14 @@ export class ImageGeneratorAgent {
         const maxAttempts = 30; // up to 60s
         for (let i = 0; i < maxAttempts; i++) {
             await sleep(2000);
-            const res = await fetch(getUrl, {
-                headers: { Authorization: `Bearer ${this.token}` },
-            });
+            const res = await fetchWithLogging(
+                this.log,
+                getUrl,
+                {
+                    headers: { Authorization: `Bearer ${this.token}` },
+                },
+                { system: 'replicate', operation: 'poll_prediction' }
+            );
             if (!res.ok) continue;
             const updated = (await res.json()) as ReplicatePrediction;
             if (updated.status === 'succeeded' || updated.status === 'failed' || updated.status === 'canceled') {
@@ -175,7 +215,10 @@ export class ImageGeneratorAgent {
     }
 
     private async downloadFile(url: string, dest: string): Promise<void> {
-        const res = await fetch(url);
+        const res = await fetchWithLogging(this.log, url, undefined, {
+            system: 'replicate',
+            operation: 'download_generated_image',
+        });
         if (!res.ok) throw new Error(`Failed to download generated image: ${res.status}`);
         const buffer = await res.arrayBuffer();
         writeFileSync(dest, Buffer.from(buffer));
@@ -183,7 +226,7 @@ export class ImageGeneratorAgent {
 
     // ── Prompt construction ──────────────────────────────────────────────────
 
-    private buildPrompt(post: SocialPost, feedback?: string): string {
+    private buildPrompt(post: SocialPost, feedback?: string, referenceImageUrl?: string): string {
         const brand = getBrandVoice();
         const studioName = brand.studio.name;
         const pillarStyle = this.getPillarStyle(post.contentPillar);
@@ -208,7 +251,11 @@ export class ImageGeneratorAgent {
             ? `REVISION NOTES FROM OWNER: ${cleanedFeedback}. Apply these notes while preserving brand style and wellness context.`
             : '';
 
-        return `${stylePrefix}. ${post.imageDirection}. ${revisionInstructions} Realistic textures, approachable tone, social-ready composition`;
+        const referenceInstructions = referenceImageUrl
+            ? `REFERENCE IMAGE: ${referenceImageUrl}. Use this image only to influence key object details (shape, materials, product design cues). Do not copy framing, background, people, or composition. Create a fresh scene aligned to the campaign brief.`
+            : '';
+
+        return `${stylePrefix}. ${post.imageDirection}. ${referenceInstructions} ${revisionInstructions} Realistic textures, approachable tone, social-ready composition`;
     }
 
     private getPillarStyle(pillar: SocialPost['contentPillar']): string {

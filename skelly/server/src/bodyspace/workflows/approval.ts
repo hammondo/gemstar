@@ -6,9 +6,11 @@ import { Resend } from 'resend';
 import { settings } from '../config.js';
 import { getCampaignById, getCampaignsByStatus, updateCampaignStatus, updatePostStatus } from '../db.js';
 import type { Campaign } from '../types.js';
+import { getAgentLogger } from '../utils/logger.js';
 
 export class ApprovalWorkflow {
     private resend: Resend | null;
+    private readonly log = getAgentLogger('ApprovalWorkflow');
 
     constructor() {
         this.resend = settings.resendApiKey ? new Resend(settings.resendApiKey) : null;
@@ -20,21 +22,48 @@ export class ApprovalWorkflow {
         const approvalUrl = `${settings.dashboardBaseUrl}/campaigns/${campaign.id}/review`;
 
         if (this.resend && settings.ownerEmail) {
+            const startedAt = Date.now();
+            this.log.info(
+                {
+                    event: 'outbound.request',
+                    system: 'resend',
+                    operation: 'emails.send',
+                    campaignId: campaign.id,
+                    to: settings.ownerEmail,
+                },
+                'Outbound request started'
+            );
+
             await this.resend.emails.send({
                 from: 'BodySpace Agent <agent@bodyspacerecoverystudio.com.au>',
                 to: [settings.ownerEmail],
                 subject: `✅ New campaign ready for review: ${campaign.name}`,
                 html: this.buildEmailHtml(campaign, approvalUrl),
             });
-            console.log(`[Approval] Email sent to ${settings.ownerEmail}`);
+
+            this.log.info(
+                {
+                    event: 'outbound.response',
+                    system: 'resend',
+                    operation: 'emails.send',
+                    campaignId: campaign.id,
+                    durationMs: Date.now() - startedAt,
+                },
+                'Outbound response received'
+            );
+            this.log.info({ campaignId: campaign.id, email: settings.ownerEmail }, 'Owner notification sent');
         } else {
             // Console fallback for development
-            console.log('\n' + '='.repeat(60));
-            console.log(`CAMPAIGN READY FOR REVIEW: ${campaign.name}`);
-            console.log(`Theme: ${campaign.theme}`);
-            console.log(`Posts: ${campaign.posts.length}`);
-            console.log(`Review URL: ${approvalUrl}`);
-            console.log('='.repeat(60) + '\n');
+            this.log.info(
+                {
+                    campaignId: campaign.id,
+                    campaignName: campaign.name,
+                    theme: campaign.theme,
+                    posts: campaign.posts.length,
+                    reviewUrl: approvalUrl,
+                },
+                'Campaign ready for review (email disabled)'
+            );
         }
     }
 
@@ -44,12 +73,12 @@ export class ApprovalWorkflow {
         updatePostStatus(postId, 'approved', {
             ownerEdit: editedCopy || undefined,
         });
-        console.log(`[Approval] Post ${postId} approved`);
+        this.log.info({ postId }, 'Post approved');
     }
 
     rejectPost(postId: string, reason?: string): void {
         updatePostStatus(postId, 'rejected', { rejectionReason: reason });
-        console.log(`[Approval] Post ${postId} rejected: ${reason ?? '(no reason)'}`);
+        this.log.info({ postId, reason: reason ?? '(no reason)' }, 'Post rejected');
     }
 
     approveCampaign(campaignId: string, ownerNotes?: string): Campaign {
@@ -62,7 +91,10 @@ export class ApprovalWorkflow {
         }
 
         updateCampaignStatus(campaignId, 'approved', { ownerNotes });
-        console.log(`[Approval] Campaign '${campaign.name}' approved (${approvedPosts.length} posts ready)`);
+        this.log.info(
+            { campaignId, campaignName: campaign.name, approvedPosts: approvedPosts.length },
+            'Campaign approved'
+        );
 
         return { ...campaign, status: 'approved', ownerNotes };
     }
@@ -71,7 +103,10 @@ export class ApprovalWorkflow {
         const campaign = getCampaignById(campaignId);
         if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
         updateCampaignStatus(campaignId, 'rejected', { ownerNotes: reason });
-        console.log(`[Approval] Campaign '${campaign.name}' rejected`);
+        this.log.info(
+            { campaignId, campaignName: campaign.name, reason: reason ?? '(no reason)' },
+            'Campaign rejected'
+        );
         return { ...campaign, status: 'rejected' };
     }
 

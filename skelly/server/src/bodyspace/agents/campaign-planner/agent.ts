@@ -17,15 +17,17 @@ import type {
     TrendsBrief,
 } from '../../types.js';
 import { addDays, format, nextMonday } from '../../utils/dates.js';
+import { getAgentLogger } from '../../utils/logger.js';
 
 export class CampaignPlannerAgent {
     private client: Anthropic | null;
     private brand = getBrandVoice();
     private services = getAllServices();
+    private readonly log = getAgentLogger('CampaignPlanner');
 
     constructor() {
         if (settings.mockAnthropic) {
-            console.log('[CampaignPlanner] Running in MOCK mode');
+            this.log.info('Running in mock mode');
             this.client = null;
         } else {
             if (!settings.anthropicApiKey) {
@@ -48,8 +50,9 @@ export class CampaignPlannerAgent {
         const pushServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'push'));
         const pauseServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'pause'));
 
-        console.log(
-            `[CampaignPlanner] PUSH: ${Object.keys(pushServices).length} services, PAUSE: ${Object.keys(pauseServices).length}`
+        this.log.info(
+            { pushCount: Object.keys(pushServices).length, pauseCount: Object.keys(pauseServices).length },
+            'Computed service availability buckets'
         );
 
         const prompt = this.buildPrompt(pushServices, pauseServices, brief, options.ownerBrief);
@@ -64,7 +67,10 @@ export class CampaignPlannerAgent {
         const filename = `campaign_${campaign.id.slice(0, 8)}_${new Date().toISOString().slice(0, 10)}.json`;
         writeFileSync(resolve(dir, filename), JSON.stringify(campaign, null, 2));
 
-        console.log(`[CampaignPlanner] Campaign '${campaign.name}' created with ${campaign.posts.length} posts`);
+        this.log.info(
+            { campaignId: campaign.id, campaignName: campaign.name, posts: campaign.posts.length },
+            'Campaign created'
+        );
         return campaign;
     }
 
@@ -203,6 +209,19 @@ Return ONLY valid JSON:
     }
 
     private async generate(prompt: string): Promise<GeneratedCampaign> {
+        const startedAt = Date.now();
+        this.log.info(
+            {
+                event: 'outbound.request',
+                system: 'anthropic',
+                operation: 'messages.create',
+                model: 'claude-sonnet-4-20250514',
+                promptBytes: Buffer.byteLength(prompt),
+                prompt,
+            },
+            'Outbound request started'
+        );
+
         const response = await this.client!.messages.create({
             model: 'claude-sonnet-4-20250514',
             max_tokens: 8000,
@@ -212,6 +231,17 @@ Write post copy that sounds genuinely human — warm, grounded, and personal.
 Output ONLY valid JSON, no preamble, no markdown fences.`,
             messages: [{ role: 'user', content: prompt }],
         });
+
+        this.log.info(
+            {
+                event: 'outbound.response',
+                system: 'anthropic',
+                operation: 'messages.create',
+                durationMs: Date.now() - startedAt,
+                stopReason: response.stop_reason,
+            },
+            'Outbound response received'
+        );
 
         let text = '';
         for (const block of response.content) {

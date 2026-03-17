@@ -18,6 +18,7 @@ import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 
 import { resolve } from 'path';
 import { chromium, type Page } from 'playwright';
 import { settings } from '../../config.js';
+import { getAgentLogger } from '../../utils/logger.js';
 
 const FRESHA_EMAIL = process.env.FRESHA_EMAIL ?? '';
 const FRESHA_PASSWORD = process.env.FRESHA_PASSWORD ?? '';
@@ -26,22 +27,21 @@ const LOGIN_URL = 'https://partners.fresha.com/users/sign-in';
 const APPOINTMENT_LIST_URL = 'https://partners.fresha.com/reports/table/appointment-list';
 
 export class FreshaDownloader {
+    private readonly log = getAgentLogger('FreshaDownloader');
+
     /**
      * Download the appointments CSV for the next 14 days.
      * Returns the path to the saved CSV file, or null if download failed.
      */
     async downloadAppointmentsCsv(): Promise<string | null> {
         if (!FRESHA_EMAIL || !FRESHA_PASSWORD) {
-            console.warn(
-                '[FreshaDownloader] FRESHA_EMAIL and FRESHA_PASSWORD not set in .env — skipping auto-download.\n' +
-                    '  Add them to .env or export the CSV manually from Fresha.'
-            );
+            this.log.warn('FRESHA_EMAIL/FRESHA_PASSWORD not set in .env — skipping auto-download');
             return null;
         }
 
         mkdirSync(EXPORTS_DIR, { recursive: true });
 
-        console.log('[FreshaDownloader] Launching browser...');
+        this.log.info('Launching browser');
         const browser = await chromium.launch({
             headless: true,
             // If running on a server without a display, headless: true is required.
@@ -55,6 +55,7 @@ export class FreshaDownloader {
                 acceptDownloads: true,
             });
             const page = await context.newPage();
+            this.attachNetworkLogging(page);
 
             // ── Step 1: Log in ──────────────────────────────────────────────
             await this.login(page);
@@ -69,17 +70,17 @@ export class FreshaDownloader {
             const csvPath = await this.downloadCsv(page);
 
             await context.close();
-            console.log(`[FreshaDownloader] Downloaded: ${csvPath}`);
+            this.log.info({ csvPath }, 'Download completed');
             return csvPath;
         } catch (err) {
-            console.error('[FreshaDownloader] Failed:', String(err));
+            this.log.error({ error: String(err) }, 'Download failed');
             // Take a screenshot for debugging
             try {
                 const page = (await browser.contexts()[0]?.pages())?.[0];
                 if (page) {
                     const screenshotPath = resolve(EXPORTS_DIR, 'debug-screenshot.png');
                     await page.screenshot({ path: screenshotPath, fullPage: true });
-                    console.log(`[FreshaDownloader] Debug screenshot saved: ${screenshotPath}`);
+                    this.log.info({ screenshotPath }, 'Debug screenshot saved');
                 }
             } catch {
                 /* ignore screenshot errors */
@@ -93,7 +94,7 @@ export class FreshaDownloader {
     // ── Private steps ───────────────────────────────────────────────────────
 
     private async login(page: Page): Promise<void> {
-        console.log('[FreshaDownloader] Logging in...');
+        this.log.info('Logging in');
         await page.goto(LOGIN_URL, { waitUntil: 'networkidle' });
 
         // Step 1: Fill email
@@ -114,21 +115,21 @@ export class FreshaDownloader {
         await page.waitForURL((url) => !url.toString().includes('/sign-in') && !url.toString().includes('/login'), {
             timeout: 15000,
         });
-        console.log('[FreshaDownloader] Logged in successfully');
+        this.log.info('Logged in successfully');
     }
 
     private async navigateToReport(page: Page): Promise<void> {
-        console.log('[FreshaDownloader] Navigating to appointment list report...');
+        this.log.info('Navigating to appointment list report');
         await page.goto(APPOINTMENT_LIST_URL, { waitUntil: 'networkidle' });
 
         // If redirected to a different reports path, try Sales → Appointments via nav
         if (!page.url().includes('appointment-list')) {
-            console.warn('[FreshaDownloader] Unexpected URL after navigation');
+            this.log.warn({ currentUrl: page.url() }, 'Unexpected URL after navigation');
         }
     }
 
     private async setDateRange(page: Page): Promise<void> {
-        console.log('[FreshaDownloader] Setting date range to next 30 days...');
+        this.log.info('Setting date range to next 30 days');
 
         await page.getByText('Last 30 days').click();
 
@@ -208,11 +209,11 @@ export class FreshaDownloader {
         }
 
         await page.waitForLoadState('networkidle');
-        console.log(`[FreshaDownloader] Date range set: ${todayStr} → ${endStr}`);
+        this.log.info({ from: todayStr, to: endStr }, 'Date range set');
     }
 
     private async downloadCsv(page: Page): Promise<string> {
-        console.log('[FreshaDownloader] Triggering CSV download...');
+        this.log.info('Triggering CSV download');
 
         // Set up download handler BEFORE clicking the button
         const downloadPromise = page.waitForEvent('download', {
@@ -242,8 +243,7 @@ export class FreshaDownloader {
         const filename = `appointments_${new Date().toISOString().slice(0, 10)}.csv`;
         const savePath = resolve(EXPORTS_DIR, filename);
 
-        console.log(`[FreshaDownloader] Download event received: ${download.suggestedFilename()}`);
-        console.log(`[FreshaDownloader] Saving download to ${savePath}`);
+        this.log.info({ suggestedFilename: download.suggestedFilename(), savePath }, 'Download event received');
         await download.saveAs(savePath);
         this.normalizeCsvToUtf8(savePath);
 
@@ -251,6 +251,62 @@ export class FreshaDownloader {
         this.pruneOldExports(5);
 
         return savePath;
+    }
+
+    private attachNetworkLogging(page: Page): void {
+        page.on('request', (request) => {
+            const type = request.resourceType();
+            if (type !== 'document' && type !== 'xhr' && type !== 'fetch') return;
+            this.log.info(
+                {
+                    event: 'outbound.request',
+                    system: 'fresha',
+                    operation: 'playwright_request',
+                    method: request.method(),
+                    url: request.url(),
+                    resourceType: type,
+                },
+                'Outbound request started'
+            );
+        });
+
+        page.on('response', (response) => {
+            const request = response.request();
+            const type = request.resourceType();
+            if (type !== 'document' && type !== 'xhr' && type !== 'fetch') return;
+            const payload = {
+                event: 'outbound.response',
+                system: 'fresha',
+                operation: 'playwright_request',
+                method: request.method(),
+                url: request.url(),
+                status: response.status(),
+                ok: response.ok(),
+                resourceType: type,
+            };
+            if (response.ok()) {
+                this.log.info(payload, 'Outbound response received');
+            } else {
+                this.log.warn(payload, 'Outbound response received');
+            }
+        });
+
+        page.on('requestfailed', (request) => {
+            const type = request.resourceType();
+            if (type !== 'document' && type !== 'xhr' && type !== 'fetch') return;
+            this.log.error(
+                {
+                    event: 'outbound.error',
+                    system: 'fresha',
+                    operation: 'playwright_request',
+                    method: request.method(),
+                    url: request.url(),
+                    resourceType: type,
+                    error: request.failure()?.errorText,
+                },
+                'Outbound request failed'
+            );
+        });
     }
 
     private normalizeCsvToUtf8(filePath: string): void {

@@ -5,9 +5,12 @@
 import { settings } from '../../config.js';
 import { getCampaignById, getCampaignsByStatus, updateCampaignStatus, updatePostStatus } from '../../db.js';
 import type { Campaign, SocialPost } from '../../types.js';
+import { fetchWithLogging } from '../../utils/http.js';
+import { getAgentLogger } from '../../utils/logger.js';
 
 export class SchedulerAgent {
     private baseUrl = settings.postizApiUrl;
+    private readonly log = getAgentLogger('Scheduler');
     private headers = {
         Authorization: `Bearer ${settings.postizApiKey}`,
         'Content-Type': 'application/json',
@@ -20,7 +23,7 @@ export class SchedulerAgent {
             : getCampaignsByStatus('approved');
 
         if (campaigns.length === 0) {
-            console.log('[Scheduler] No approved campaigns to schedule');
+            this.log.info('No approved campaigns to schedule');
             return;
         }
 
@@ -30,14 +33,19 @@ export class SchedulerAgent {
     }
 
     private async scheduleCampaign(campaign: Campaign): Promise<void> {
-        console.log(`[Scheduler] Scheduling '${campaign.name}'...`);
+        this.log.info({ campaignId: campaign.id, campaignName: campaign.name }, 'Scheduling campaign');
 
         const approvedPosts = campaign.posts.filter((p) => p.status === 'approved' && p.imageStatus === 'approved');
 
         const imagePending = campaign.posts.filter((p) => p.status === 'approved' && p.imageStatus !== 'approved');
         if (imagePending.length > 0) {
-            console.warn(
-                `[Scheduler] Skipping ${imagePending.length} post(s) — image not yet approved (imageStatus: ${[...new Set(imagePending.map((p) => p.imageStatus))].join(', ')})`
+            this.log.warn(
+                {
+                    campaignId: campaign.id,
+                    skipped: imagePending.length,
+                    imageStatuses: [...new Set(imagePending.map((p) => p.imageStatus))],
+                },
+                'Skipping posts with non-approved images'
             );
         }
 
@@ -49,10 +57,22 @@ export class SchedulerAgent {
                 const postizId = await this.schedulePost(post);
                 updatePostStatus(post.id, 'scheduled', { postizPostId: postizId });
                 success++;
-                console.log(`[Scheduler] ✓ ${post.platform} post scheduled for ${post.scheduledFor} (${postizId})`);
+                this.log.info(
+                    {
+                        campaignId: campaign.id,
+                        postId: post.id,
+                        platform: post.platform,
+                        scheduledFor: post.scheduledFor,
+                        postizId,
+                    },
+                    'Post scheduled'
+                );
             } catch (err) {
                 failed++;
-                console.error(`[Scheduler] ✗ Failed to schedule post ${post.id}: ${String(err)}`);
+                this.log.error(
+                    { campaignId: campaign.id, postId: post.id, error: String(err) },
+                    'Failed to schedule post'
+                );
             }
         }
 
@@ -60,7 +80,10 @@ export class SchedulerAgent {
             updateCampaignStatus(campaign.id, 'scheduled');
         }
 
-        console.log(`[Scheduler] Campaign '${campaign.name}': ${success} scheduled, ${failed} failed`);
+        this.log.info(
+            { campaignId: campaign.id, campaignName: campaign.name, success, failed },
+            'Campaign scheduling complete'
+        );
     }
 
     private async schedulePost(post: SocialPost): Promise<string> {
@@ -86,11 +109,16 @@ export class SchedulerAgent {
             ],
         };
 
-        const response = await fetch(`${this.baseUrl}/api/posts`, {
-            method: 'POST',
-            headers: this.headers,
-            body: JSON.stringify(body),
-        });
+        const response = await fetchWithLogging(
+            this.log,
+            `${this.baseUrl}/api/posts`,
+            {
+                method: 'POST',
+                headers: this.headers,
+                body: JSON.stringify(body),
+            },
+            { system: 'postiz', operation: 'create_post', postId: post.id, campaignId: post.campaignId }
+        );
 
         if (!response.ok) {
             const text = await response.text();
@@ -103,7 +131,12 @@ export class SchedulerAgent {
 
     private async getAccountId(platform: string): Promise<string> {
         if (!this.accountsCache) {
-            const response = await fetch(`${this.baseUrl}/api/integrations`, { headers: this.headers });
+            const response = await fetchWithLogging(
+                this.log,
+                `${this.baseUrl}/api/integrations`,
+                { headers: this.headers },
+                { system: 'postiz', operation: 'list_integrations' }
+            );
             if (!response.ok) throw new Error(`Failed to fetch Postiz accounts: ${response.status}`);
 
             const accounts = (await response.json()) as Array<{ id: string; providerIdentifier: string }>;

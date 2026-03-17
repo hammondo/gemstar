@@ -382,13 +382,22 @@ bodyspaceRouter.post('/posts/:id/image/regenerate', async (req, res) => {
         const postId = req.params.id;
         const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
         const feedback = typeof req.body?.feedback === 'string' ? req.body.feedback.trim() : undefined;
+        const referenceImageUrl =
+            typeof req.body?.referenceImageUrl === 'string' ? req.body.referenceImageUrl.trim() : undefined;
         if (!campaignId) {
             res.status(400).json({ ok: false, error: 'campaignId is required' });
             return;
         }
         const agent = new ImageGeneratorAgent();
-        const imageUrl = await agent.regenerate(postId, campaignId, feedback);
-        res.json({ ok: true, postId, imageUrl, imageStatus: 'draft', feedbackApplied: Boolean(feedback) });
+        const imageUrl = await agent.regenerate(postId, campaignId, feedback, referenceImageUrl);
+        res.json({
+            ok: true,
+            postId,
+            imageUrl,
+            imageStatus: 'draft',
+            feedbackApplied: Boolean(feedback),
+            referenceApplied: Boolean(referenceImageUrl),
+        });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
