@@ -174,16 +174,15 @@ export function importFreshaCsv(
     return postJson('/api/bodyspace/fresha/import', { csvContent, filename });
 }
 
-export function approvePostImage(
-    postId: string
-): Promise<{ ok: boolean; postId: string; imageStatus: ImageStatus }> {
+export function approvePostImage(postId: string): Promise<{ ok: boolean; postId: string; imageStatus: ImageStatus }> {
     return postJson(`/api/bodyspace/posts/${postId}/image/approve`);
 }
 
 export function regeneratePostImage(
     postId: string,
     campaignId: string,
-    feedback?: string
+    feedback?: string,
+    referenceImageUrl?: string
 ): Promise<{ ok: boolean; postId: string; imageUrl: string; imageStatus: ImageStatus; feedbackApplied: boolean }> {
-    return postJson(`/api/bodyspace/posts/${postId}/image/regenerate`, { campaignId, feedback });
+    return postJson(`/api/bodyspace/posts/${postId}/image/regenerate`, { campaignId, feedback, referenceImageUrl });
 }

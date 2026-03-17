@@ -11,9 +11,9 @@ import {
     getLatestTrends,
     getSignals,
     importFreshaCsv,
+    regeneratePostImage,
     rejectCampaign,
     rejectPost,
-    regeneratePostImage,
     runAll,
     runCampaign,
     runFreshaWatcher,
@@ -57,6 +57,7 @@ function App() {
     const [campaignNotes, setCampaignNotes] = useState('');
     const [postDrafts, setPostDrafts] = useState<Record<string, string>>({});
     const [imageFeedback, setImageFeedback] = useState<Record<string, string>>({});
+    const [imageRefUrl, setImageRefUrl] = useState<Record<string, string>>({});
     const [imageAction, setImageAction] = useState<Record<string, 'generating' | 'approving' | null>>({});
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState<'dashboard' | 'theme'>('dashboard');
@@ -157,12 +158,14 @@ function App() {
     async function onRegenerateImage(post: SocialPost) {
         if (!selectedCampaign) return;
         const feedback = imageFeedback[post.id]?.trim() || undefined;
+        const referenceImageUrl = imageRefUrl[post.id]?.trim() || undefined;
         setImageAction((prev) => ({ ...prev, [post.id]: 'generating' }));
         setError(null);
         try {
-            await regeneratePostImage(post.id, selectedCampaign.id, feedback);
+            await regeneratePostImage(post.id, selectedCampaign.id, feedback, referenceImageUrl);
             await loadCampaign(selectedCampaign.id);
             setImageFeedback((prev) => ({ ...prev, [post.id]: '' }));
+            setImageRefUrl((prev) => ({ ...prev, [post.id]: '' }));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Image generation failed');
         } finally {
@@ -545,6 +548,10 @@ function App() {
                                                     onFeedbackChange={(val) =>
                                                         setImageFeedback((prev) => ({ ...prev, [post.id]: val }))
                                                     }
+                                                    referenceUrl={imageRefUrl[post.id] ?? ''}
+                                                    onReferenceUrlChange={(val) =>
+                                                        setImageRefUrl((prev) => ({ ...prev, [post.id]: val }))
+                                                    }
                                                     isGenerating={imageAction[post.id] === 'generating'}
                                                     isApproving={imageAction[post.id] === 'approving'}
                                                     onRegenerate={() => void onRegenerateImage(post)}
@@ -614,6 +621,8 @@ interface PostImagePanelProps {
     post: SocialPost;
     feedback: string;
     onFeedbackChange: (val: string) => void;
+    referenceUrl: string;
+    onReferenceUrlChange: (val: string) => void;
     isGenerating: boolean;
     isApproving: boolean;
     onRegenerate: () => void;
@@ -631,6 +640,8 @@ function PostImagePanel({
     post,
     feedback,
     onFeedbackChange,
+    referenceUrl,
+    onReferenceUrlChange,
     isGenerating,
     isApproving,
     onRegenerate,
@@ -648,9 +659,7 @@ function PostImagePanel({
                 >
                     image: {status}
                 </span>
-                {post.imageDirection && (
-                    <span className="text-muted text-xs italic">{post.imageDirection}</span>
-                )}
+                {post.imageDirection && <span className="text-muted text-xs italic">{post.imageDirection}</span>}
             </div>
 
             {/* Image preview */}
@@ -666,9 +675,21 @@ function PostImagePanel({
             <textarea
                 className="border-warm-200 bg-warm-50 text-charcoal mb-2 w-full rounded-lg border p-2 font-[inherit] text-sm"
                 rows={2}
-                placeholder={hasImage ? 'Optional feedback for regeneration…' : 'Optional direction for image generation…'}
+                placeholder={
+                    hasImage ? 'Optional feedback for regeneration…' : 'Optional direction for image generation…'
+                }
                 value={feedback}
                 onChange={(e) => onFeedbackChange(e.target.value)}
+                disabled={isGenerating || isApproving}
+            />
+
+            {/* Reference image URL — influences object look/details while keeping a fresh scene */}
+            <input
+                type="url"
+                className="border-warm-200 bg-warm-50 text-charcoal mb-2 w-full rounded-lg border p-2 font-[inherit] text-sm"
+                placeholder="Reference image URL (optional — influences details, e.g. pod should look like this)"
+                value={referenceUrl}
+                onChange={(e) => onReferenceUrlChange(e.target.value)}
                 disabled={isGenerating || isApproving}
             />
 

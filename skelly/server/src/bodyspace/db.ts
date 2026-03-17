@@ -134,6 +134,9 @@ function runMigrations(db: Database.Database): void {
             // Column already exists — expected on existing databases
         }
     }
+
+    // Reset any posts stuck in 'generating' from a previous crashed or interrupted run
+    db.exec("UPDATE social_posts SET image_status = 'needed' WHERE image_status = 'generating'");
 }
 
 // ─── Typed helpers ────────────────────────────────────────────────────────
