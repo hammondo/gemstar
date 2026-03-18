@@ -29,6 +29,14 @@ export async function postJson<T>(path: string, body: unknown = {}): Promise<T> 
     return handleResponse<T>(response);
 }
 
+export async function postFormBody<T>(path: string, body: FormData): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        method: 'POST',
+        body,
+    });
+    return handleResponse<T>(response);
+}
+
 export interface SSECallbacks<T> {
     onProgress?: (data: T) => void;
     onComplete?: () => void;

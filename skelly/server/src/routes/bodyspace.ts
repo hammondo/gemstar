@@ -1,5 +1,6 @@
 import express, { Router } from 'express';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import multer from 'multer';
+import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { FreshaWatcherAgent } from '../bodyspace/agents/fresha-watcher/agent.js';
 import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.js';
@@ -20,6 +21,17 @@ import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 
 const bodyspaceRouter = Router();
+const upload = multer({
+    dest: resolve(settings.dataDir, 'uploads'),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
+    fileFilter: (_req, file, cb) => {
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed'));
+        }
+    },
+});
 const orchestrator = new BodyspaceOrchestrator();
 
 // Serve locally stored generated images
@@ -377,13 +389,20 @@ bodyspaceRouter.post('/posts/:id/blog/sync', async (req, res) => {
 });
 
 // Regenerate the AI image for a single post
-bodyspaceRouter.post('/posts/:id/image/regenerate', async (req, res) => {
+bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImageFile'), async (req, res) => {
     try {
-        const postId = req.params.id;
+        const postId = req.params.id as string;
         const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
         const feedback = typeof req.body?.feedback === 'string' ? req.body.feedback.trim() : undefined;
-        const referenceImageUrl =
+        let referenceImageUrl =
             typeof req.body?.referenceImageUrl === 'string' ? req.body.referenceImageUrl.trim() : undefined;
+        // If file uploaded, convert to data URL then clean up the temp file
+        const file = req.file;
+        if (file) {
+            const buffer = readFileSync(file.path);
+            referenceImageUrl = `data:${file.mimetype};base64,${buffer.toString('base64')}`;
+            unlinkSync(file.path);
+        }
         if (!campaignId) {
             res.status(400).json({ ok: false, error: 'campaignId is required' });
             return;

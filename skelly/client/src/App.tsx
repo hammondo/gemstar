@@ -27,6 +27,7 @@ import {
     type SocialPost,
     type TrendsBrief,
 } from './api/appApi';
+import { postFormBody } from './api/http';
 
 const statusBadge: Record<string, string> = {
     pending_review: 'bg-amber-100 text-amber-800',
@@ -58,6 +59,7 @@ function App() {
     const [postDrafts, setPostDrafts] = useState<Record<string, string>>({});
     const [imageFeedback, setImageFeedback] = useState<Record<string, string>>({});
     const [imageRefUrl, setImageRefUrl] = useState<Record<string, string>>({});
+    const [imageRefFile, setImageRefFile] = useState<Record<string, File | null>>({});
     const [imageAction, setImageAction] = useState<Record<string, 'generating' | 'approving' | null>>({});
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState<'dashboard' | 'theme'>('dashboard');
@@ -159,13 +161,24 @@ function App() {
         if (!selectedCampaign) return;
         const feedback = imageFeedback[post.id]?.trim() || undefined;
         const referenceImageUrl = imageRefUrl[post.id]?.trim() || undefined;
+        const referenceImageFile = imageRefFile[post.id] || null;
         setImageAction((prev) => ({ ...prev, [post.id]: 'generating' }));
         setError(null);
         try {
-            await regeneratePostImage(post.id, selectedCampaign.id, feedback, referenceImageUrl);
+            // If file is present, send file; else send URL
+            if (referenceImageFile) {
+                const formData = new FormData();
+                formData.append('campaignId', selectedCampaign.id);
+                if (feedback) formData.append('feedback', feedback);
+                formData.append('referenceImageFile', referenceImageFile);
+                await postFormBody(`/api/bodyspace/posts/${post.id}/image/regenerate`, formData);
+            } else {
+                await regeneratePostImage(post.id, selectedCampaign.id, feedback, referenceImageUrl);
+            }
             await loadCampaign(selectedCampaign.id);
             setImageFeedback((prev) => ({ ...prev, [post.id]: '' }));
             setImageRefUrl((prev) => ({ ...prev, [post.id]: '' }));
+            setImageRefFile((prev) => ({ ...prev, [post.id]: null }));
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Image generation failed');
         } finally {
@@ -552,6 +565,10 @@ function App() {
                                                     onReferenceUrlChange={(val) =>
                                                         setImageRefUrl((prev) => ({ ...prev, [post.id]: val }))
                                                     }
+                                                    referenceFile={imageRefFile[post.id] ?? null}
+                                                    onReferenceFileChange={(file) =>
+                                                        setImageRefFile((prev) => ({ ...prev, [post.id]: file }))
+                                                    }
                                                     isGenerating={imageAction[post.id] === 'generating'}
                                                     isApproving={imageAction[post.id] === 'approving'}
                                                     onRegenerate={() => void onRegenerateImage(post)}
@@ -623,6 +640,8 @@ interface PostImagePanelProps {
     onFeedbackChange: (val: string) => void;
     referenceUrl: string;
     onReferenceUrlChange: (val: string) => void;
+    referenceFile: File | null;
+    onReferenceFileChange: (file: File | null) => void;
     isGenerating: boolean;
     isApproving: boolean;
     onRegenerate: () => void;
@@ -642,6 +661,8 @@ function PostImagePanel({
     onFeedbackChange,
     referenceUrl,
     onReferenceUrlChange,
+    referenceFile,
+    onReferenceFileChange,
     isGenerating,
     isApproving,
     onRegenerate,
@@ -692,6 +713,21 @@ function PostImagePanel({
                 onChange={(e) => onReferenceUrlChange(e.target.value)}
                 disabled={isGenerating || isApproving}
             />
+
+            {/* Reference image file upload */}
+            <input
+                key={referenceFile ? 'has-file' : 'no-file'}
+                type="file"
+                accept="image/*"
+                className="border-warm-200 bg-warm-50 text-charcoal mb-2 w-full rounded-lg border p-2 font-[inherit] text-sm"
+                disabled={isGenerating || isApproving}
+                onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    onReferenceFileChange(file);
+                    if (file) onReferenceUrlChange('');
+                }}
+            />
+            {referenceFile && <div className="text-muted mb-2 text-xs">Selected file: {referenceFile.name}</div>}
 
             {/* Action buttons */}
             <div className="flex flex-wrap gap-2">
