@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { type Campaign, approveCampaign, getCampaign, rejectCampaign } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
+import PostPreview from '../components/PostPreview';
 
 export default function CampaignDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -107,35 +108,31 @@ export default function CampaignDetailPage() {
                 <Badge value={campaign.status} />
             </div>
 
-            {/* Posts grid */}
-            <div className="grid gap-4 md:grid-cols-2">
+            {/* Posts */}
+            <div className="flex flex-wrap gap-6">
                 {campaign.posts.map((post) => (
                     <Link
                         key={post.id}
                         to={`/posts/${post.id}`}
-                        className="rounded-2xl border border-warm-200 bg-white p-5 shadow-sm transition hover:border-teal-300 hover:shadow-md"
+                        className="group relative block shrink-0 transition"
                     >
-                        <div className="mb-3 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                                <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
-                                    {post.platform}
-                                </span>
-                                <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                                    {post.postType}
-                                </span>
-                            </div>
-                            <Badge value={post.status} />
+                        <div className="transition group-hover:opacity-90 group-hover:ring-2 group-hover:ring-teal-400 group-hover:ring-offset-2 rounded-2xl">
+                            <PostPreview post={post} />
                         </div>
-
-                        {post.imageUrl && (
-                            <img
-                                src={post.imageUrl}
-                                alt="Post visual"
-                                className="mb-3 h-40 w-full rounded-xl object-cover"
-                            />
-                        )}
-
-                        <p className="text-sm leading-relaxed text-charcoal">{post.ownerEdit ?? post.copy}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                            <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
+                                {post.platform}
+                            </span>
+                            <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                                {post.postType}
+                            </span>
+                            <Badge value={post.status} />
+                            {post.scheduledFor && (
+                                <span className="text-xs text-muted">
+                                    {new Date(post.scheduledFor).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                                </span>
+                            )}
+                        </div>
                     </Link>
                 ))}
             </div>

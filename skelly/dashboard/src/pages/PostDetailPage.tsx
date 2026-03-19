@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { type SocialPost, approvePost, getPost, rejectPost, updatePost } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
+import PostPreview from '../components/PostPreview';
 
 export default function PostDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -194,16 +195,12 @@ export default function PostDetailPage() {
 
                 {/* Preview panel */}
                 <div className="space-y-5">
-                    {post.imageUrl && (
-                        <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
-                            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Image</p>
-                            <img
-                                src={post.imageUrl}
-                                alt="Post visual"
-                                className="w-full rounded-xl object-cover"
-                            />
+                    <div className="rounded-2xl border border-warm-200 bg-white p-5 shadow-sm">
+                        <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted">Live preview</p>
+                        <div className="flex justify-center">
+                            <PostPreview post={{ ...post, ownerEdit: copy }} />
                         </div>
-                    )}
+                    </div>
 
                     <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Details</p>
