@@ -9,7 +9,7 @@ dotenv.config();
 
 const app = express();
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
-const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
+const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5174')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
@@ -41,7 +41,16 @@ app.get('/', (_req, res) => {
     res.json({ message: 'Skelly API running', bodyspaceApi: '/api/bodyspace' });
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
     console.log(`Skelly API listening on http://localhost:${port}`);
     // startBodyspaceScheduler();
+});
+
+server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`Port ${port} is already in use. Kill the existing process and try again.`);
+    } else {
+        console.error('Server error:', err);
+    }
+    process.exit(1);
 });

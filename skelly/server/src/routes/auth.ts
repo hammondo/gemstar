@@ -2,19 +2,27 @@ import { ConfidentialClientApplication } from '@azure/msal-node';
 import { Router } from 'express';
 import { settings } from '../bodyspace/config.js';
 
-const msalClient = new ConfidentialClientApplication({
-    auth: {
-        clientId: settings.msClientId,
-        clientSecret: settings.msClientSecret,
-        authority: `https://login.microsoftonline.com/${settings.msTenantId}`,
-    },
-});
+let _msalClient: ConfidentialClientApplication | null = null;
+
+function getMsalClient(): ConfidentialClientApplication {
+    if (!settings.msClientId) throw new Error('MS_CLIENT_ID is not configured');
+    if (!_msalClient) {
+        _msalClient = new ConfidentialClientApplication({
+            auth: {
+                clientId: settings.msClientId,
+                clientSecret: settings.msClientSecret,
+                authority: `https://login.microsoftonline.com/${settings.msTenantId}`,
+            },
+        });
+    }
+    return _msalClient;
+}
 
 const authRouter = Router();
 
 authRouter.get('/login', async (_req, res) => {
     try {
-        const authUrl = await msalClient.getAuthCodeUrl({
+        const authUrl = await getMsalClient().getAuthCodeUrl({
             scopes: ['openid', 'profile', 'email'],
             redirectUri: settings.msRedirectUri,
         });
@@ -31,7 +39,7 @@ authRouter.get('/callback', async (req, res) => {
         return;
     }
     try {
-        const result = await msalClient.acquireTokenByCode({
+        const result = await getMsalClient().acquireTokenByCode({
             code,
             scopes: ['openid', 'profile', 'email'],
             redirectUri: settings.msRedirectUri,
