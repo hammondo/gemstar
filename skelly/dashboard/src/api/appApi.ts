@@ -44,9 +44,13 @@ export interface Campaign {
 }
 
 export interface AvailabilitySignal {
-    date: string;
+    serviceId: string;
+    serviceName: string;
+    availableSlots: number;
     signal: 'push' | 'hold' | 'pause';
-    freeSlots: number;
+    pushThreshold: number;
+    pauseThreshold: number;
+    recordedAt: string;
 }
 
 export interface BodyspaceStatus {
@@ -61,7 +65,14 @@ export interface BodyspaceStatus {
 
 export interface TrendsBrief {
     id: string;
-    summary: string;
+    weekOf: string;
+    competitorSummary: string;
+    trendSignals: string;
+    seasonalFactors: string;
+    recommendedFocus: string;
+    opportunities: string;
+    sources: string[];
+    confidence: 'high' | 'medium' | 'low';
     createdAt: string;
 }
 

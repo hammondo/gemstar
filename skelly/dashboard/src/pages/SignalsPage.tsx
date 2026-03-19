@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+
+function stripCiteTags(text: string): string {
+    return text.replace(/<\/?cite[^>]*>/gi, '');
+}
 import { type AvailabilitySignal, type TrendsBrief, getLatestTrends, getSignals } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
@@ -19,8 +23,8 @@ export default function SignalsPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    const signalList = Object.values(signals).sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    const signalList = Object.values(signals).sort((a, b) =>
+        a.serviceName.localeCompare(b.serviceName),
     );
 
     return (
@@ -48,16 +52,10 @@ export default function SignalsPage() {
                     ) : (
                         <ul className="divide-y divide-warm-200">
                             {signalList.map((s) => (
-                                <li key={s.date} className="flex items-center justify-between gap-4 px-6 py-3.5">
+                                <li key={s.serviceId} className="flex items-center justify-between gap-4 px-6 py-3.5">
                                     <div>
-                                        <p className="text-sm font-medium text-charcoal">
-                                            {new Date(s.date).toLocaleDateString('en-AU', {
-                                                weekday: 'short',
-                                                day: 'numeric',
-                                                month: 'short',
-                                            })}
-                                        </p>
-                                        <p className="mt-0.5 text-xs text-muted">{s.freeSlots} free slots</p>
+                                        <p className="text-sm font-medium text-charcoal">{s.serviceName}</p>
+                                        <p className="mt-0.5 text-xs text-muted">{s.availableSlots} available slots</p>
                                     </div>
                                     <Badge value={s.signal} />
                                 </li>
@@ -78,14 +76,31 @@ export default function SignalsPage() {
                         ) : !trends ? (
                             <p className="text-sm text-muted">No trends brief available yet.</p>
                         ) : (
-                            <>
-                                <p className="mb-3 text-xs text-muted">
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs text-muted">Week of {trends.weekOf}</p>
+                                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                        trends.confidence === 'high' ? 'bg-green-100 text-green-700' :
+                                        trends.confidence === 'medium' ? 'bg-amber-100 text-amber-700' :
+                                        'bg-red-100 text-red-700'
+                                    }`}>{trends.confidence} confidence</span>
+                                </div>
+                                {[
+                                    { label: 'Competitor summary', value: trends.competitorSummary },
+                                    { label: 'Trend signals', value: trends.trendSignals },
+                                    { label: 'Seasonal factors', value: trends.seasonalFactors },
+                                    { label: 'Recommended focus', value: trends.recommendedFocus },
+                                    { label: 'Opportunities', value: trends.opportunities },
+                                ].map(({ label, value }) => (
+                                    <div key={label}>
+                                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+                                        <p className="text-sm leading-relaxed text-charcoal whitespace-pre-wrap">{stripCiteTags(value)}</p>
+                                    </div>
+                                ))}
+                                <p className="pt-2 text-xs text-muted">
                                     Generated {new Date(trends.createdAt).toLocaleString()}
                                 </p>
-                                <p className="text-sm leading-relaxed text-charcoal whitespace-pre-wrap">
-                                    {trends.summary}
-                                </p>
-                            </>
+                            </div>
                         )}
                     </div>
                 </section>
