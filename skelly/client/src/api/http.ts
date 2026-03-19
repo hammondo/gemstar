@@ -1,4 +1,6 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
+import { config } from '../config';
+
+const { apiBaseUrl } = config;
 
 async function handleResponse<T>(response: Response): Promise<T> {
     const payload = (await response.json().catch(() => ({}))) as {
@@ -13,16 +15,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export async function fetchJson<T>(path: string): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${path}`);
+    const response = await fetch(`${apiBaseUrl}${path}`, { credentials: 'include' });
     return handleResponse<T>(response);
 }
 
 export async function postJson<T>(path: string, body: unknown = {}): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(`${apiBaseUrl}${path}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(body),
     });
 
@@ -30,8 +33,9 @@ export async function postJson<T>(path: string, body: unknown = {}): Promise<T> 
 }
 
 export async function postFormBody<T>(path: string, body: FormData): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(`${apiBaseUrl}${path}`, {
         method: 'POST',
+        credentials: 'include',
         body,
     });
     return handleResponse<T>(response);
@@ -44,7 +48,7 @@ export interface SSECallbacks<T> {
 }
 
 export function streamSSE<T>(path: string, callbacks: SSECallbacks<T>): () => void {
-    const source = new EventSource(`${API_BASE_URL}${path}`);
+    const source = new EventSource(`${apiBaseUrl}${path}`);
 
     source.addEventListener('progress', (event) => {
         const data = JSON.parse(event.data) as T;

@@ -5,8 +5,10 @@
   "description": "Skelly monorepo app scaffold",
   "scripts": {
     "dev": "concurrently -k -n SERVER,CLIENT -c cyan,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "dev:full": "concurrently -k -n SERVER,CLIENT,DASHBOARD -c cyan,magenta,yellow \"npm --prefix server run dev\" \"npm --prefix client run dev\" \"npm --prefix dashboard run dev\"",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
+    "dev:dashboard": "npm --prefix dashboard run dev",
     "build": "npm run build:server && npm run build:client",
     "build:server": "npm --prefix server run build",
     "build:client": "npm --prefix client run build",

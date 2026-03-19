@@ -41,6 +41,12 @@ export const settings = {
     dashboardSessionSecret: process.env.DASHBOARD_SESSION_SECRET ?? 'dev-secret',
     dashboardPassword: process.env.DASHBOARD_PASSWORD ?? 'bodyspace2025',
 
+    // Microsoft authentication (Azure app registration)
+    msClientId: process.env.MS_CLIENT_ID ?? '',
+    msClientSecret: process.env.MS_CLIENT_SECRET ?? '',
+    msTenantId: process.env.MS_TENANT_ID ?? 'common',
+    msRedirectUri: process.env.MS_REDIRECT_URI ?? 'http://localhost:3000/api/auth/callback',
+
     // Agent schedules (cron, AWST)
     timezone: process.env.TIMEZONE ?? 'Australia/Perth',
     freshaWatcherCron: process.env.FRESHA_WATCHER_CRON ?? '0 8 * * *',

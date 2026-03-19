@@ -9,8 +9,10 @@ import {
     getCampaigns,
     getHealth,
     getLatestTrends,
+    getMe,
     getSignals,
     importFreshaCsv,
+    logout as apiLogout,
     regeneratePostImage,
     rejectCampaign,
     rejectPost,
@@ -19,6 +21,7 @@ import {
     runFreshaWatcher,
     runMonitorStream,
     scheduleCampaign,
+    type AuthUser,
     type AvailabilitySignal,
     type BodyspaceStatus,
     type Campaign,
@@ -28,6 +31,7 @@ import {
     type TrendsBrief,
 } from './api/appApi';
 import { postFormBody } from './api/http';
+import { config } from './config';
 
 const statusBadge: Record<string, string> = {
     pending_review: 'bg-amber-100 text-amber-800',
@@ -44,6 +48,8 @@ const signalBorder: Record<string, string> = {
 };
 
 function App() {
+    const [authChecked, setAuthChecked] = useState(false);
+    const [user, setUser] = useState<AuthUser | null>(null);
     const [health, setHealth] = useState<{
         status: string;
         service: string;
@@ -105,7 +111,15 @@ function App() {
     }
 
     useEffect(() => {
-        void loadDashboard();
+        getMe()
+            .then(({ user: me }) => {
+                setUser(me);
+                setAuthChecked(true);
+                void loadDashboard();
+            })
+            .catch(() => {
+                setAuthChecked(true); // not authenticated
+            });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -254,6 +268,29 @@ function App() {
         });
     }
 
+    if (!authChecked) {
+        return (
+            <div className="flex min-h-screen items-center justify-center">
+                <p className="text-muted text-sm">Loading…</p>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="flex min-h-screen flex-col items-center justify-center gap-4">
+                <p className="font-heading text-charcoal text-2xl font-bold">BodySpace GemStar</p>
+                <p className="text-muted text-sm">Sign in to access the dashboard</p>
+                <a
+                    href={`${config.apiBaseUrl}/api/auth/login`}
+                    className="cursor-pointer rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white transition hover:-translate-y-px hover:brightness-105"
+                >
+                    Sign in with Microsoft
+                </a>
+            </div>
+        );
+    }
+
     if (page === 'theme') {
         return (
             <div>
@@ -283,12 +320,26 @@ function App() {
                     BodySpace Recovery Studio. Use the buttons below to trigger agents on demand, or set up cron jobs to
                     run automatically. Click on a pending campaign to review and approve posts before they go live.
                 </p>
-                <button
-                    onClick={() => setPage('theme')}
-                    className="border-warm-200 bg-warm-100 mt-4 rounded-lg border px-4 py-2 text-sm font-medium text-teal-700 shadow-sm hover:bg-teal-300"
-                >
-                    View Theme Colours
-                </button>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={() => setPage('theme')}
+                        className="border-warm-200 bg-warm-100 rounded-lg border px-4 py-2 text-sm font-medium text-teal-700 shadow-sm hover:bg-teal-300"
+                    >
+                        View Theme Colours
+                    </button>
+                    <span className="text-muted ml-auto text-sm">{user.name || user.email}</span>
+                    <button
+                        onClick={() => {
+                            void apiLogout().then(() => {
+                                setUser(null);
+                                setAuthChecked(true);
+                            });
+                        }}
+                        className="border-warm-200 text-muted hover:bg-warm-100 rounded-lg border bg-white px-3 py-2 text-sm font-medium shadow-sm"
+                    >
+                        Sign out
+                    </button>
+                </div>
             </header>
 
             {loading && <p className="text-muted">Loading BodySpace dashboard...</p>}

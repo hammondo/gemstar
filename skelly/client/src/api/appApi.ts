@@ -1,5 +1,19 @@
 import { fetchJson, postJson, streamSSE, type SSECallbacks } from './http';
 
+export interface AuthUser {
+    id: string;
+    name: string;
+    email: string;
+}
+
+export function getMe(): Promise<{ ok: boolean; user: AuthUser }> {
+    return fetchJson('/api/auth/me');
+}
+
+export function logout(): Promise<{ ok: boolean }> {
+    return postJson('/api/auth/logout');
+}
+
 export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
 
 export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
