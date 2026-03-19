@@ -12,6 +12,8 @@ import {
     getCampaignsByStatus,
     getLatestSignals,
     getLatestTrendsBrief,
+    getPostById,
+    updatePostCopy,
     updatePostImage,
     updatePostSanitySync,
 } from '../bodyspace/db.js';
@@ -261,6 +263,35 @@ bodyspaceRouter.post('/fresha/import', async (req, res) => {
         const signals = await watcher.run();
 
         res.json({ ok: true, filename: safeName, signals });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.get('/posts/:id', (req, res) => {
+    try {
+        const post = getPostById(req.params.id);
+        if (!post) {
+            res.status(404).json({ ok: false, error: 'Post not found' });
+            return;
+        }
+        res.json({ ok: true, post });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.patch('/posts/:id', (req, res) => {
+    try {
+        const postId = req.params.id;
+        const { copy, scheduledFor } = req.body as { copy?: string; scheduledFor?: string | null };
+        if (typeof copy !== 'string') {
+            res.status(400).json({ ok: false, error: 'copy is required' });
+            return;
+        }
+        updatePostCopy(postId, copy.trim(), scheduledFor);
+        const post = getPostById(postId);
+        res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

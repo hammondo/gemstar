@@ -110,7 +110,11 @@ export default function CampaignDetailPage() {
             {/* Posts grid */}
             <div className="grid gap-4 md:grid-cols-2">
                 {campaign.posts.map((post) => (
-                    <div key={post.id} className="rounded-2xl border border-warm-200 bg-white p-5 shadow-sm">
+                    <Link
+                        key={post.id}
+                        to={`/posts/${post.id}`}
+                        className="rounded-2xl border border-warm-200 bg-white p-5 shadow-sm transition hover:border-teal-300 hover:shadow-md"
+                    >
                         <div className="mb-3 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                                 <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
@@ -131,8 +135,8 @@ export default function CampaignDetailPage() {
                             />
                         )}
 
-                        <p className="text-sm leading-relaxed text-charcoal">{post.copy}</p>
-                    </div>
+                        <p className="text-sm leading-relaxed text-charcoal">{post.ownerEdit ?? post.copy}</p>
+                    </Link>
                 ))}
             </div>
         </>

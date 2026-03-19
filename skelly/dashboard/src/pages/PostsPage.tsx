@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { type Campaign, type SocialPost, getCampaigns } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
@@ -54,10 +55,12 @@ export default function PostsPage() {
                         </thead>
                         <tbody className="divide-y divide-warm-200">
                             {posts.map((post) => (
-                                <tr key={post.id} className="hover:bg-warm-100 transition-colors">
+                                <tr key={post.id} className="hover:bg-warm-100 transition-colors cursor-pointer">
                                     <td className="px-5 py-3.5">
-                                        <p className="font-medium text-charcoal">{post.campaignTitle}</p>
-                                        <p className="mt-0.5 max-w-xs truncate text-xs text-muted">{post.copy}</p>
+                                        <Link to={`/posts/${post.id}`} className="block">
+                                            <p className="font-medium text-charcoal">{post.campaignTitle}</p>
+                                            <p className="mt-0.5 max-w-xs truncate text-xs text-muted">{post.ownerEdit ?? post.copy}</p>
+                                        </Link>
                                     </td>
                                     <td className="px-5 py-3.5">
                                         <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">

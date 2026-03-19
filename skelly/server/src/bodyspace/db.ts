@@ -365,6 +365,21 @@ export function updateCampaignStatus(id: string, status: CampaignStatus, extra: 
     ).run(status, now, status, now, extra.ownerNotes ?? null, id);
 }
 
+export function getPostById(postId: string): SocialPost | null {
+    const db = getDb();
+    const row = db.prepare('SELECT * FROM social_posts WHERE id = ?').get(postId) as
+        | Record<string, unknown>
+        | undefined;
+    return row ? rowToPost(row) : null;
+}
+
+export function updatePostCopy(postId: string, copy: string, scheduledFor?: string | null): void {
+    const db = getDb();
+    db.prepare(
+        `UPDATE social_posts SET owner_edit = ?, scheduled_for = COALESCE(?, scheduled_for) WHERE id = ?`
+    ).run(copy, scheduledFor ?? null, postId);
+}
+
 export function updatePostStatus(
     postId: string,
     status: PostStatus,

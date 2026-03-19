@@ -1,4 +1,4 @@
-import { fetchJson, postJson } from './http';
+import { fetchJson, patchJson, postJson } from './http';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -93,6 +93,14 @@ export function getCampaigns(status?: CampaignStatus): Promise<{ campaigns: Camp
 
 export function getCampaign(id: string): Promise<{ campaign: Campaign }> {
     return fetchJson(`/api/bodyspace/campaigns/${id}`);
+}
+
+export function getPost(id: string): Promise<{ post: SocialPost }> {
+    return fetchJson(`/api/bodyspace/posts/${id}`);
+}
+
+export function updatePost(id: string, copy: string, scheduledFor?: string | null): Promise<{ post: SocialPost }> {
+    return patchJson(`/api/bodyspace/posts/${id}`, { copy, scheduledFor });
 }
 
 export function getSignals(): Promise<{ signals: Record<string, AvailabilitySignal> }> {
