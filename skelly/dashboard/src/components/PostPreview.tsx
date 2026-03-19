@@ -1,4 +1,5 @@
 import type { SocialPost } from '../api/appApi';
+import logo from '../assets/logo.png';
 
 const INSTAGRAM_HANDLE = 'bodyspacerecovery';
 const FACEBOOK_NAME = 'BodySpace Recovery Studio';
@@ -7,14 +8,12 @@ const FACEBOOK_NAME = 'BodySpace Recovery Studio';
 
 function Avatar({ size = 32 }: { size?: number }) {
     return (
-        <div
+        <img
+            src={logo}
+            alt="BodySpace"
             style={{ width: size, height: size }}
-            className="flex shrink-0 items-center justify-center rounded-full bg-teal-500 text-white"
-        >
-            <span style={{ fontSize: size * 0.35 }} className="font-bold leading-none">
-                BS
-            </span>
-        </div>
+            className="shrink-0 rounded-full object-cover"
+        />
     );
 }
 

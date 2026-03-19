@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import type { AuthUser } from '../api/appApi';
+import logo from '../assets/logo.png';
 
 interface AppLayoutProps {
     user: AuthUser;
@@ -38,9 +39,11 @@ export default function AppLayout({ user, onLogout }: AppLayoutProps) {
             <aside className="flex w-60 shrink-0 flex-col bg-charcoal">
                 {/* Brand */}
                 <div className="flex h-16 items-center gap-2.5 border-b border-white/10 px-5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-400">
-                        <span className="text-xs font-bold text-charcoal">BS</span>
-                    </div>
+                    <img
+                        src={logo}
+                        alt="BodySpace"
+                        className="h-8 w-8 rounded-lg object-cover"
+                    />
                     <div className="leading-tight">
                         <p className="text-sm font-bold text-white">BodySpace</p>
                         <p className="text-[10px] font-medium tracking-wider text-teal-400 uppercase">GemStar</p>

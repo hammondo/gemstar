@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { type AuthUser, getMe, logout as apiLogout } from './api/appApi';
 import { config } from './config';
+import logo from './assets/logo.png';
 import AppLayout from './layouts/AppLayout';
 import AnalyticsPage from './pages/AnalyticsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
@@ -41,9 +42,11 @@ export default function App() {
         return (
             <div className="flex h-screen flex-col items-center justify-center gap-5 bg-charcoal">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-400">
-                        <span className="text-sm font-bold text-charcoal">BS</span>
-                    </div>
+                    <img
+                        src={logo}
+                        alt="BodySpace"
+                        className="h-10 w-10 rounded-xl object-cover"
+                    />
                     <div>
                         <p className="text-lg font-bold text-white">BodySpace</p>
                         <p className="text-[11px] font-semibold tracking-widest text-teal-400 uppercase">GemStar</p>
