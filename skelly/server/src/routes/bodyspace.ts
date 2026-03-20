@@ -17,6 +17,7 @@ import {
     updatePostImage,
     updatePostSanitySync,
 } from '../bodyspace/db.js';
+import { clearMetaCache, getMetaAnalytics } from '../bodyspace/services/meta-analytics.js';
 import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
@@ -136,6 +137,20 @@ bodyspaceRouter.get('/status', (_req, res) => {
             }, 0),
         },
     });
+});
+
+bodyspaceRouter.get('/analytics/meta', async (_req, res) => {
+    try {
+        const data = await getMetaAnalytics();
+        res.json({ ok: true, ...data });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.post('/analytics/meta/refresh', (_req, res) => {
+    clearMetaCache();
+    res.json({ ok: true });
 });
 
 bodyspaceRouter.get('/signals', (_req, res) => {

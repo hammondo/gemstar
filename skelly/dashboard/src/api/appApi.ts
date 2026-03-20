@@ -78,6 +78,67 @@ export interface TrendsBrief {
 
 // ── API calls ─────────────────────────────────────────────────────────────────
 
+// ── Meta analytics ────────────────────────────────────────────────────────────
+
+export interface IgAccountData {
+    username: string;
+    followersCount: number;
+    mediaCount: number;
+    reach7d: number;
+    impressions7d: number;
+    profileViews7d: number;
+}
+
+export interface IgPostData {
+    id: string;
+    caption: string;
+    mediaType: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM' | 'REEL';
+    timestamp: string;
+    permalink: string;
+    likeCount: number;
+    commentsCount: number;
+    impressions: number;
+    reach: number;
+    saved: number;
+    videoViews?: number;
+    engagementRate: number;
+}
+
+export interface FbPageData {
+    name: string;
+    fanCount: number;
+    reach7d: number;
+    impressions7d: number;
+    engagedUsers7d: number;
+}
+
+export interface FbPostData {
+    id: string;
+    message: string;
+    createdTime: string;
+    impressions: number;
+    reach: number;
+    engagements: number;
+    clicks: number;
+}
+
+export type MetaAnalyticsResult =
+    | { configured: false }
+    | {
+          configured: true;
+          fetchedAt: string;
+          instagram?: { account: IgAccountData; recentPosts: IgPostData[] };
+          facebook?: { page: FbPageData; recentPosts: FbPostData[] };
+      };
+
+export function getMetaAnalytics(): Promise<MetaAnalyticsResult> {
+    return fetchJson('/api/bodyspace/analytics/meta');
+}
+
+export function refreshMetaCache(): Promise<{ ok: boolean }> {
+    return postJson('/api/bodyspace/analytics/meta/refresh');
+}
+
 export function getHealth(): Promise<{ status: string; service: string; timestamp: string }> {
     return fetchJson('/api/health');
 }

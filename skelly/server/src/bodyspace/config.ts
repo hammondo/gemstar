@@ -41,6 +41,12 @@ export const settings = {
     dashboardSessionSecret: process.env.DASHBOARD_SESSION_SECRET ?? 'dev-secret',
     dashboardPassword: process.env.DASHBOARD_PASSWORD ?? 'bodyspace2025',
 
+    // Meta (Facebook / Instagram) analytics
+    metaAccessToken: process.env.META_ACCESS_TOKEN ?? '',
+    metaPageId: process.env.META_PAGE_ID ?? '',
+    metaIgUserId: process.env.META_IG_USER_ID ?? '',
+    metaApiVersion: process.env.META_API_VERSION ?? 'v21.0',
+
     // Microsoft authentication (Azure app registration)
     msClientId: process.env.MS_CLIENT_ID ?? '',
     msClientSecret: process.env.MS_CLIENT_SECRET ?? '',
