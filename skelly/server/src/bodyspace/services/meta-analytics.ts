@@ -8,7 +8,6 @@ export interface IgAccountData {
     mediaCount: number;
     reach7d: number;
     impressions7d: number;
-    profileViews7d: number;
 }
 
 export interface IgPostData {
@@ -19,11 +18,7 @@ export interface IgPostData {
     permalink: string;
     likeCount: number;
     commentsCount: number;
-    impressions: number;
-    reach: number;
-    saved: number;
-    videoViews?: number;
-    engagementRate: number; // (likes + comments + saved) / reach
+    engagement: number; // likes + comments
 }
 
 export interface FbPageData {
@@ -97,69 +92,23 @@ function sumInsightValues(data: Array<{ value: number }>): number {
 // ── Instagram ─────────────────────────────────────────────────────────────────
 
 async function fetchIgAccount(): Promise<IgAccountData> {
-    const since = String(daysAgoUnix(7));
-    const until = String(Math.floor(Date.now() / 1000));
-
-    const [profile, insights] = await Promise.all([
-        graph<{ username: string; followers_count: number; media_count: number }>(
-            `/${settings.metaIgUserId}`,
-            { fields: 'username,followers_count,media_count' },
-        ),
-        graph<{ data: Array<{ name: string; values: Array<{ value: number }> }> }>(
-            `/${settings.metaIgUserId}/insights`,
-            { metric: 'impressions,reach,profile_views', period: 'day', since, until },
-        ),
-    ]);
-
-    const metric = (name: string) =>
-        sumInsightValues(insights.data.find((d) => d.name === name)?.values ?? []);
+    const profile = await graph<{
+        username: string;
+        followers_count: number;
+        media_count: number;
+        biography: string;
+        website: string;
+    }>(`/${settings.metaIgUserId}`, {
+        fields: 'username,followers_count,media_count,biography,website',
+    });
 
     return {
         username: profile.username,
         followersCount: profile.followers_count,
         mediaCount: profile.media_count,
-        impressions7d: metric('impressions'),
-        reach7d: metric('reach'),
-        profileViews7d: metric('profile_views'),
+        impressions7d: 0,
+        reach7d: 0,
     };
-}
-
-async function fetchIgPostInsights(
-    postId: string,
-    mediaType: string,
-): Promise<{ impressions: number; reach: number; saved: number; videoViews?: number }> {
-    const isStory = mediaType === 'STORY';
-    const isVideo = mediaType === 'VIDEO' || mediaType === 'REEL';
-
-    const metricList = isStory
-        ? 'impressions,reach'
-        : isVideo
-          ? 'impressions,reach,saved,video_views'
-          : 'impressions,reach,saved';
-
-    try {
-        const res = await graph<{ data: Array<{ name: string; values?: Array<{ value: number }>; value?: number }> }>(
-            `/${postId}/insights`,
-            { metric: metricList },
-        );
-
-        const get = (name: string): number => {
-            const entry = res.data.find((d) => d.name === name);
-            // Insights return either a flat `value` or a `values` array
-            if (!entry) return 0;
-            if (typeof entry.value === 'number') return entry.value;
-            return entry.values?.[0]?.value ?? 0;
-        };
-
-        return {
-            impressions: get('impressions'),
-            reach: get('reach'),
-            saved: get('saved'),
-            videoViews: isVideo ? get('video_views') : undefined,
-        };
-    } catch {
-        return { impressions: 0, reach: 0, saved: 0 };
-    }
 }
 
 async function fetchIgRecentPosts(): Promise<IgPostData[]> {
@@ -178,31 +127,18 @@ async function fetchIgRecentPosts(): Promise<IgPostData[]> {
         limit: '12',
     });
 
-    const posts = await Promise.all(
-        media.data.map(async (m) => {
-            const ins = await fetchIgPostInsights(m.id, m.media_type);
-            const engagementRate =
-                ins.reach > 0
-                    ? ((m.like_count + m.comments_count + ins.saved) / ins.reach) * 100
-                    : 0;
-            return {
-                id: m.id,
-                caption: m.caption ?? '',
-                mediaType: m.media_type as IgPostData['mediaType'],
-                timestamp: m.timestamp,
-                permalink: m.permalink,
-                likeCount: m.like_count,
-                commentsCount: m.comments_count,
-                impressions: ins.impressions,
-                reach: ins.reach,
-                saved: ins.saved,
-                videoViews: ins.videoViews,
-                engagementRate: Math.round(engagementRate * 10) / 10,
-            };
-        }),
-    );
-
-    return posts.sort((a, b) => b.engagementRate - a.engagementRate);
+    return media.data
+        .map((m) => ({
+            id: m.id,
+            caption: m.caption ?? '',
+            mediaType: m.media_type as IgPostData['mediaType'],
+            timestamp: m.timestamp,
+            permalink: m.permalink,
+            likeCount: m.like_count,
+            commentsCount: m.comments_count,
+            engagement: m.like_count + m.comments_count,
+        }))
+        .sort((a, b) => b.engagement - a.engagement);
 }
 
 // ── Facebook ──────────────────────────────────────────────────────────────────
@@ -215,19 +151,15 @@ async function fetchFbPage(): Promise<FbPageData> {
         graph<{ name: string; fan_count: number }>(`/${settings.metaPageId}`, {
             fields: 'name,fan_count',
         }),
-        graph<{ data: Array<{ name: string; values: Array<{ value: number }> }> }>(
-            `/${settings.metaPageId}/insights`,
-            {
-                metric: 'page_impressions,page_reach,page_engaged_users',
-                period: 'day',
-                since,
-                until,
-            },
-        ),
+        graph<{ data: Array<{ name: string; values: Array<{ value: number }> }> }>(`/${settings.metaPageId}/insights`, {
+            metric: 'page_impressions,page_reach,page_engaged_users',
+            period: 'day',
+            since,
+            until,
+        }),
     ]);
 
-    const metric = (name: string) =>
-        sumInsightValues(insights.data.find((d) => d.name === name)?.values ?? []);
+    const metric = (name: string) => sumInsightValues(insights.data.find((d) => d.name === name)?.values ?? []);
 
     return {
         name: profile.name,
@@ -246,42 +178,15 @@ async function fetchFbRecentPosts(): Promise<FbPostData[]> {
         limit: '12',
     });
 
-    const withInsights = await Promise.all(
-        posts.data.map(async (p) => {
-            try {
-                const ins = await graph<{
-                    data: Array<{ name: string; values: Array<{ value: number }> }>;
-                }>(`/${p.id}/insights`, {
-                    metric: 'post_impressions,post_reach,post_engagements,post_clicks',
-                });
-
-                const get = (name: string): number =>
-                    ins.data.find((d) => d.name === name)?.values?.[0]?.value ?? 0;
-
-                return {
-                    id: p.id,
-                    message: p.message ?? '',
-                    createdTime: p.created_time,
-                    impressions: get('post_impressions'),
-                    reach: get('post_reach'),
-                    engagements: get('post_engagements'),
-                    clicks: get('post_clicks'),
-                };
-            } catch {
-                return {
-                    id: p.id,
-                    message: p.message ?? '',
-                    createdTime: p.created_time,
-                    impressions: 0,
-                    reach: 0,
-                    engagements: 0,
-                    clicks: 0,
-                };
-            }
-        }),
-    );
-
-    return withInsights.sort((a, b) => b.engagements - a.engagements);
+    return posts.data.map((p) => ({
+        id: p.id,
+        message: p.message ?? '',
+        createdTime: p.created_time,
+        impressions: 0,
+        reach: 0,
+        engagements: 0,
+        clicks: 0,
+    }));
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────

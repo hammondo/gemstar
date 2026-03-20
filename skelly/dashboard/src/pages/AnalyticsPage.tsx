@@ -500,16 +500,13 @@ export default function AnalyticsPage() {
                                 <h3 className="text-sm font-semibold text-charcoal">Instagram — @{meta.instagram.account.username}</h3>
                             </div>
 
-                            <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
+                            <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-2">
                                 <StatCard label="Followers" value={meta.instagram.account.followersCount.toLocaleString()} />
-                                <StatCard label="Reach (7 days)" value={meta.instagram.account.reach7d.toLocaleString()} />
-                                <StatCard label="Impressions (7 days)" value={meta.instagram.account.impressions7d.toLocaleString()} />
-                                <StatCard label="Profile views (7 days)" value={meta.instagram.account.profileViews7d.toLocaleString()} />
                                 <StatCard label="Total posts" value={meta.instagram.account.mediaCount.toLocaleString()} />
                             </div>
 
                             <div className="mb-8">
-                                <SectionCard title="Top Instagram posts by engagement rate">
+                                <SectionCard title="Top Instagram posts by engagement">
                                     {meta.instagram.recentPosts.length === 0 ? (
                                         <p className="text-sm text-muted">No posts found.</p>
                                     ) : (
@@ -519,12 +516,9 @@ export default function AnalyticsPage() {
                                                     <tr className="border-b border-warm-200 text-left text-xs font-semibold uppercase tracking-wider text-muted">
                                                         <th className="pb-3 pr-4">Caption</th>
                                                         <th className="pb-3 pr-4">Type</th>
-                                                        <th className="pb-3 pr-4 text-right">Reach</th>
-                                                        <th className="pb-3 pr-4 text-right">Impressions</th>
                                                         <th className="pb-3 pr-4 text-right">Likes</th>
                                                         <th className="pb-3 pr-4 text-right">Comments</th>
-                                                        <th className="pb-3 pr-4 text-right">Saves</th>
-                                                        <th className="pb-3 text-right">Eng. rate</th>
+                                                        <th className="pb-3 text-right">Engagement</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-warm-200">
@@ -548,12 +542,9 @@ export default function AnalyticsPage() {
                                                                     {p.mediaType}
                                                                 </span>
                                                             </td>
-                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.reach.toLocaleString()}</td>
-                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.impressions.toLocaleString()}</td>
                                                             <td className="py-3 pr-4 text-right text-charcoal">{p.likeCount.toLocaleString()}</td>
                                                             <td className="py-3 pr-4 text-right text-charcoal">{p.commentsCount.toLocaleString()}</td>
-                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.saved.toLocaleString()}</td>
-                                                            <td className="py-3 text-right font-semibold text-teal-700">{p.engagementRate}%</td>
+                                                            <td className="py-3 text-right font-semibold text-teal-700">{p.engagement.toLocaleString()}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -581,7 +572,7 @@ export default function AnalyticsPage() {
                             </div>
 
                             <div className="mb-6">
-                                <SectionCard title="Top Facebook posts by engagement">
+                                <SectionCard title="Recent Facebook posts">
                                     {meta.facebook.recentPosts.length === 0 ? (
                                         <p className="text-sm text-muted">No posts found.</p>
                                     ) : (
@@ -590,27 +581,20 @@ export default function AnalyticsPage() {
                                                 <thead>
                                                     <tr className="border-b border-warm-200 text-left text-xs font-semibold uppercase tracking-wider text-muted">
                                                         <th className="pb-3 pr-4">Post</th>
-                                                        <th className="pb-3 pr-4 text-right">Reach</th>
-                                                        <th className="pb-3 pr-4 text-right">Impressions</th>
-                                                        <th className="pb-3 pr-4 text-right">Engagements</th>
-                                                        <th className="pb-3 text-right">Clicks</th>
+                                                        <th className="pb-3 text-right">Date</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-warm-200">
                                                     {meta.facebook.recentPosts.map((p) => (
                                                         <tr key={p.id} className="hover:bg-warm-100">
                                                             <td className="py-3 pr-4">
-                                                                <p className="max-w-xs truncate text-charcoal">
-                                                                    {p.message.slice(0, 80) || '(no text)'}
+                                                                <p className="max-w-sm truncate text-charcoal">
+                                                                    {p.message.slice(0, 120) || '(no text)'}
                                                                 </p>
-                                                                <span className="text-xs text-muted">
-                                                                    {new Date(p.createdTime).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
-                                                                </span>
                                                             </td>
-                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.reach.toLocaleString()}</td>
-                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.impressions.toLocaleString()}</td>
-                                                            <td className="py-3 pr-4 text-right font-semibold text-[#1877f2]">{p.engagements.toLocaleString()}</td>
-                                                            <td className="py-3 text-right text-charcoal">{p.clicks.toLocaleString()}</td>
+                                                            <td className="py-3 text-right text-xs text-muted whitespace-nowrap">
+                                                                {new Date(p.createdTime).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                            </td>
                                                         </tr>
                                                     ))}
                                                 </tbody>

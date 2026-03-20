@@ -86,7 +86,6 @@ export interface IgAccountData {
     mediaCount: number;
     reach7d: number;
     impressions7d: number;
-    profileViews7d: number;
 }
 
 export interface IgPostData {
@@ -97,11 +96,7 @@ export interface IgPostData {
     permalink: string;
     likeCount: number;
     commentsCount: number;
-    impressions: number;
-    reach: number;
-    saved: number;
-    videoViews?: number;
-    engagementRate: number;
+    engagement: number;
 }
 
 export interface FbPageData {
