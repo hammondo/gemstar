@@ -23,7 +23,7 @@ services:
       pushThreshold: 8
       pauseThreshold: 1
       keyBenefits: ["injury recovery", "chronic pain", "postural correction", "sports recovery"]
-      targetAudience: ["athletes", "FIFO workers", "people with chronic pain"]
+      targetAudience: ["athletes", "neck and back pain sufferers", "FIFO workers", "people with chronic pain"]
 
     - id: pregnancy_massage
       name: "Pregnancy Massage"
@@ -43,7 +43,7 @@ services:
       pushThreshold: 5
       pauseThreshold: 1
       keyBenefits: ["lymphatic flow", "reduced fluid retention", "circulation support", "post-op recovery"]
-      targetAudience: ["post-op clients", "detox seekers", "clients with swelling or fluid retention"]
+      targetAudience: ["post-op clients", "detox seekers", "menopause clients", "clients with swelling or fluid retention"]
 
   naturalHealing:
     - id: reiki
