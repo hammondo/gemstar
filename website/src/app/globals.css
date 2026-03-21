@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #fdf8f3;
-  --color-bg-alt: #f2ece3;
+  --color-bg: #fffdfa;
+  --color-bg-alt: #f7f3ee;
   --color-surface: #ffffff;
-  --color-border: #e8ddd2;
+  --color-border: #e5d6c3;
 
-  --color-text: #2c2420;
+  --color-text: #231f20;
   --color-text-muted: #7a6a5e;
 
-  --color-primary: #6d8c61;
-  --color-primary-hover: #556e4b;
-  --color-accent: #c4956a;
+  --color-primary: #bfa16a; /* gold/tan */
+  --color-primary-hover: #a88b54;
+  --color-accent: #6d8c61; /* muted green as accent */
 
   --font-display: "Cormorant Garamond", Georgia, serif;
   --font-body: "DM Sans", system-ui, sans-serif;
@@ -26,6 +26,8 @@
     @apply bg-bg text-text antialiased;
     font-family: var(--font-body);
     line-height: 1.7;
+    background-color: var(--color-bg);
+    color: var(--color-text);
   }
 
   h1,
@@ -36,11 +38,35 @@
     font-family: var(--font-display);
     font-weight: 400;
     line-height: 1.2;
+    letter-spacing: 0.01em;
   }
 
   a {
-    color: inherit;
+    color: var(--color-primary);
     text-decoration: none;
+    transition: color 0.2s;
+  }
+  a:hover {
+    color: var(--color-primary-hover);
+  }
+  button,
+  .btn {
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 0.75em 2em;
+    font-family: var(--font-body);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    transition: background 0.2s, color 0.2s;
+    cursor: pointer;
+  }
+  button:hover,
+  .btn:hover {
+    background: var(--color-primary-hover);
+    color: #fff;
   }
 
   img {
