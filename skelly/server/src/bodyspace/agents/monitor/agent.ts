@@ -67,11 +67,11 @@ export class MonitorAgent {
         return brief;
     }
 
-    async runStreaming(onProgress: OnProgress): Promise<TrendsBrief> {
+    async runStreaming(onProgress: OnProgress, customPrompt?: string): Promise<TrendsBrief> {
         this.log.info('Starting weekly research (streaming)');
         onProgress({ type: 'status', message: 'Building research prompt...' });
 
-        const prompt = this.buildPrompt();
+        const prompt = customPrompt ?? this.buildPrompt();
         onProgress({
             type: 'status',
             message: 'Starting Claude research with web search...',
@@ -92,7 +92,7 @@ export class MonitorAgent {
         return brief;
     }
 
-    private buildPrompt(): string {
+    public buildPrompt(): string {
         const today = new Date().toLocaleDateString('en-AU', {
             weekday: 'long',
             day: 'numeric',

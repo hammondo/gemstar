@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { FreshaWatcherAgent } from '../bodyspace/agents/fresha-watcher/agent.js';
 import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.js';
 import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
+import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
 import { settings } from '../bodyspace/config.js';
 import {
@@ -490,6 +491,69 @@ bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImag
             feedbackApplied: Boolean(feedback),
             referenceApplied: Boolean(referenceImageUrl),
         });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// ── Wizard ──────────────────────────────────────────────────────────────────
+
+bodyspaceRouter.get('/wizard/monitor-prompt', (_req, res) => {
+    const agent = new MonitorAgent();
+    res.json({ ok: true, prompt: agent.buildPrompt() });
+});
+
+bodyspaceRouter.post('/wizard/monitor/stream', (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+
+    const send = (event: string, data: unknown) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const customPrompt = typeof req.body?.customPrompt === 'string' ? req.body.customPrompt : undefined;
+    let closed = false;
+    req.on('close', () => { closed = true; });
+
+    const agent = new MonitorAgent();
+    agent
+        .runStreaming((progress) => {
+            if (closed) return;
+            send('progress', progress);
+        }, customPrompt)
+        .then(() => {
+            if (!closed) { send('complete', { ok: true }); res.end(); }
+        })
+        .catch((err) => {
+            if (!closed) { send('error', { message: String(err) }); res.end(); }
+        });
+});
+
+bodyspaceRouter.get('/wizard/campaign-prompt', (_req, res) => {
+    const planner = new CampaignPlannerAgent();
+    res.json({ ok: true, prompt: planner.buildPromptForWizard() });
+});
+
+bodyspaceRouter.post('/wizard/campaign', async (req, res) => {
+    try {
+        const customPrompt = typeof req.body?.customPrompt === 'string' ? req.body.customPrompt : undefined;
+        const ownerBrief = typeof req.body?.ownerBrief === 'string' ? req.body.ownerBrief : undefined;
+
+        const planner = new CampaignPlannerAgent();
+        const campaign = await planner.run({ customPrompt, ownerBrief });
+
+        const approval = new ApprovalWorkflow();
+        await approval.notifyOwner(campaign);
+
+        const imageGen = new ImageGeneratorAgent();
+        void imageGen.run(campaign.id).catch((err) => {
+            console.error('[Wizard] Image generation failed:', err);
+        });
+
+        res.json({ ok: true, campaign });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

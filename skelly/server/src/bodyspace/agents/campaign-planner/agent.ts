@@ -5,7 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { randomUUID } from 'crypto';
 import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
-import { getAllServices, getBrandVoice, settings } from '../../config.js';
+import { getBrandVoice, settings } from '../../config.js';
 import { getLatestSignals, getLatestTrendsBrief, saveCampaign } from '../../db.js';
 import type {
     AvailabilitySignals,
@@ -22,7 +22,6 @@ import { getAgentLogger } from '../../utils/logger.js';
 export class CampaignPlannerAgent {
     private client: Anthropic | null;
     private brand = getBrandVoice();
-    private services = getAllServices();
     private readonly log = getAgentLogger('CampaignPlanner');
 
     constructor() {
@@ -37,11 +36,21 @@ export class CampaignPlannerAgent {
         }
     }
 
+    /** Build the campaign prompt using current signals + trends brief, for wizard preview. */
+    public buildPromptForWizard(ownerBrief?: string): string {
+        const signals = getLatestSignals();
+        const brief = getLatestTrendsBrief();
+        const pushServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'push'));
+        const pauseServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'pause'));
+        return this.buildPrompt(pushServices, pauseServices, brief, ownerBrief);
+    }
+
     async run(
         options: {
             availabilitySignals?: AvailabilitySignals;
             trendsBrief?: TrendsBrief | null;
             ownerBrief?: string;
+            customPrompt?: string;
         } = {}
     ): Promise<Campaign> {
         const signals = options.availabilitySignals ?? getLatestSignals();
@@ -55,7 +64,7 @@ export class CampaignPlannerAgent {
             'Computed service availability buckets'
         );
 
-        const prompt = this.buildPrompt(pushServices, pauseServices, brief, options.ownerBrief);
+        const prompt = options.customPrompt ?? this.buildPrompt(pushServices, pauseServices, brief, options.ownerBrief);
         const generated = settings.mockAnthropic ? this.getMockCampaign() : await this.generate(prompt);
         const campaign = this.buildCampaignRecord(generated, signals, brief?.id);
 

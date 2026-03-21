@@ -8,6 +8,7 @@ import AgentsPage from './pages/AgentsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
+import NewCampaignWizardPage from './pages/NewCampaignWizardPage';
 import DashboardPage from './pages/DashboardPage';
 import PostDetailPage from './pages/PostDetailPage';
 import PostsPage from './pages/PostsPage';
@@ -71,6 +72,7 @@ export default function App() {
                 <Route index element={<DashboardPage />} />
                 <Route path="agents" element={<AgentsPage />} />
                 <Route path="campaigns" element={<CampaignsPage />} />
+                <Route path="campaigns/new" element={<NewCampaignWizardPage />} />
                 <Route path="campaigns/:id" element={<CampaignDetailPage />} />
                 <Route path="posts" element={<PostsPage />} />
                 <Route path="posts/:id" element={<PostDetailPage />} />

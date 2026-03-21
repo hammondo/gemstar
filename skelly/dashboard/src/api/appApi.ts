@@ -1,4 +1,4 @@
-import { fetchJson, patchJson, postForm, postJson, streamSSE, type SSECallbacks } from './http';
+import { fetchJson, patchJson, postForm, postJson, streamSSE, streamSSEPost, type SSECallbacks } from './http';
 export type { SSECallbacks };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -233,6 +233,27 @@ export function regeneratePostImageWithFile(
     if (opts.feedback) form.append('feedback', opts.feedback);
     if (opts.file) form.append('referenceImageFile', opts.file);
     return postForm(`/api/bodyspace/posts/${postId}/image/regenerate`, form);
+}
+
+// ── Wizard ────────────────────────────────────────────────────────────────────
+
+export function getMonitorPrompt(): Promise<{ ok: boolean; prompt: string }> {
+    return fetchJson('/api/bodyspace/wizard/monitor-prompt');
+}
+
+export function streamMonitorWizard(customPrompt: string, callbacks: SSECallbacks<MonitorProgress>): () => void {
+    return streamSSEPost('/api/bodyspace/wizard/monitor/stream', { customPrompt }, callbacks);
+}
+
+export function getCampaignPrompt(): Promise<{ ok: boolean; prompt: string }> {
+    return fetchJson('/api/bodyspace/wizard/campaign-prompt');
+}
+
+export function runCampaignWizard(opts: {
+    customPrompt?: string;
+    ownerBrief?: string;
+}): Promise<{ ok: boolean; campaign: Campaign }> {
+    return postJson('/api/bodyspace/wizard/campaign', opts);
 }
 
 // ── Agent triggers ────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { type Campaign, type CampaignStatus, getCampaigns } from '../api/appApi';
+import { Wand2 } from 'lucide-react';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
 
@@ -29,7 +30,19 @@ export default function CampaignsPage() {
 
     return (
         <>
-            <PageHeader title="Campaigns" subtitle={`${campaigns.length} campaign${campaigns.length !== 1 ? 's' : ''}`} />
+            <PageHeader
+                title="Campaigns"
+                subtitle={`${campaigns.length} campaign${campaigns.length !== 1 ? 's' : ''}`}
+                actions={
+                    <Link
+                        to="/campaigns/new"
+                        className="flex items-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-600"
+                    >
+                        <Wand2 size={15} />
+                        New Campaign
+                    </Link>
+                }
+            />
 
             {error && (
                 <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
