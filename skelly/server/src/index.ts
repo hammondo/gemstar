@@ -2,6 +2,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import session from 'express-session';
+import { existsSync } from 'fs';
+import { dirname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { settings } from './bodyspace/config.js';
 import apiRouter from './routes/index.js';
 
@@ -37,9 +40,19 @@ app.use(
 
 app.use('/api', apiRouter);
 
-app.get('/', (_req, res) => {
-    res.json({ message: 'Skelly API running', bodyspaceApi: '/api/bodyspace' });
-});
+// Serve dashboard SPA in production
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const dashboardDist = resolve(
+    process.env.DASHBOARD_DIST_PATH ?? join(__dirname, '../../dashboard/dist')
+);
+if (existsSync(dashboardDist)) {
+    app.use(express.static(dashboardDist));
+    app.get('*', (_req, res) => res.sendFile(join(dashboardDist, 'index.html')));
+} else {
+    app.get('/', (_req, res) => {
+        res.json({ message: 'Skelly API running', bodyspaceApi: '/api/bodyspace' });
+    });
+}
 
 const server = app.listen(port, () => {
     console.log(`Skelly API listening on http://localhost:${port}`);
