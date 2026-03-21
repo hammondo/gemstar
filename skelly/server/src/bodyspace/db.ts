@@ -246,6 +246,33 @@ export function saveTrendsBrief(data: Omit<TrendsBrief, 'id' | 'createdAt'>): Tr
     return { ...data, id, createdAt: new Date().toISOString() };
 }
 
+export function updateTrendsBrief(
+    id: string,
+    patch: {
+        competitorSummary: string;
+        trendSignals: string;
+        seasonalFactors: string;
+        recommendedFocus: string;
+        opportunities: string;
+    },
+): TrendsBrief | null {
+    const db = getDb();
+    db.prepare(
+        `UPDATE trends_briefs
+         SET competitor_summary = ?, trend_signals = ?, seasonal_factors = ?,
+             recommended_focus = ?, opportunities = ?
+         WHERE id = ?`,
+    ).run(
+        patch.competitorSummary,
+        patch.trendSignals,
+        patch.seasonalFactors,
+        patch.recommendedFocus,
+        patch.opportunities,
+        id,
+    );
+    return getLatestTrendsBrief();
+}
+
 export function getLatestTrendsBrief(): TrendsBrief | null {
     const db = getDb();
     const row = db.prepare('SELECT * FROM trends_briefs ORDER BY created_at DESC LIMIT 1').get() as

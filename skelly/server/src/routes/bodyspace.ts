@@ -15,6 +15,7 @@ import {
     getCampaignsByStatus,
     getLatestSignals,
     getLatestTrendsBrief,
+    updateTrendsBrief,
     getPostById,
     updatePostCopy,
     updatePostImage,
@@ -162,6 +163,13 @@ bodyspaceRouter.get('/signals', (_req, res) => {
 
 bodyspaceRouter.get('/trends/latest', (_req, res) => {
     res.json({ ok: true, brief: getLatestTrendsBrief() });
+});
+
+bodyspaceRouter.patch('/trends/:id', (req, res) => {
+    const id = req.params.id as string;
+    const { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities } = req.body as Record<string, string>;
+    const brief = updateTrendsBrief(id, { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities });
+    res.json({ ok: true, brief });
 });
 
 bodyspaceRouter.get('/campaigns', (req, res) => {

@@ -8,12 +8,19 @@ import {
     getCampaignPrompt,
     getLatestTrends,
     getMonitorSearchTerms,
+    runCampaignWizard,
     saveMonitorSearchTerms,
     streamMonitorWizard,
     suggestMonitorTerms,
-    runCampaignWizard,
+    updateTrendsBrief,
 } from '../api/appApi';
 import PageHeader from '../components/PageHeader';
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function stripCites(text: string): string {
+    return text.replace(/<cite[^>]*>[\s\S]*?<\/cite>/g, '').replace(/\s{2,}/g, ' ').trim();
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,7 +46,7 @@ function Stepper({ current }: { current: 1 | 2 | 3 }) {
                                         ? 'bg-teal-700 text-white'
                                         : active
                                           ? 'border-2 border-teal-700 bg-white text-teal-700'
-                                          : 'border-2 border-warm-200 bg-white text-muted'
+                                          : 'border-warm-200 text-muted border-2 bg-white'
                                 }`}
                             >
                                 {done ? <Check size={14} strokeWidth={2.5} /> : n}
@@ -73,21 +80,15 @@ function ProgressLog({ entries, state }: { entries: string[]; state: RunState })
     if (entries.length === 0 && state === 'idle') return null;
 
     return (
-        <div className="mt-4 max-h-48 overflow-y-auto rounded-xl border border-warm-200 bg-warm-50 px-4 py-3 font-mono text-xs">
+        <div className="border-warm-200 bg-warm-50 mt-4 max-h-48 overflow-y-auto rounded-xl border px-4 py-3 font-mono text-xs">
             {entries.map((line, i) => (
-                <p key={i} className="leading-relaxed text-muted">
+                <p key={i} className="text-muted leading-relaxed">
                     {line}
                 </p>
             ))}
-            {state === 'running' && (
-                <p className="animate-pulse text-teal-700">Running…</p>
-            )}
-            {state === 'done' && (
-                <p className="font-semibold text-green-600">✓ Done</p>
-            )}
-            {state === 'error' && entries.length === 0 && (
-                <p className="text-red-600">An error occurred.</p>
-            )}
+            {state === 'running' && <p className="animate-pulse text-teal-700">Running…</p>}
+            {state === 'done' && <p className="font-semibold text-green-600">✓ Done</p>}
+            {state === 'error' && entries.length === 0 && <p className="text-red-600">An error occurred.</p>}
             <div ref={bottomRef} />
         </div>
     );
@@ -100,8 +101,8 @@ function BriefCard({ brief }: { brief: TrendsBrief | null }) {
 
     if (!brief) {
         return (
-            <div className="mb-5 rounded-xl border border-warm-200 bg-warm-50 p-4">
-                <p className="text-xs italic text-muted">No brief yet — run research to generate one.</p>
+            <div className="border-warm-200 bg-warm-50 rounded-xl border p-4">
+                <p className="text-muted text-xs italic">No brief yet — run research to generate one.</p>
             </div>
         );
     }
@@ -118,17 +119,15 @@ function BriefCard({ brief }: { brief: TrendsBrief | null }) {
         }
     })();
 
-    const excerpt =
-        brief.recommendedFocus.length > 120
-            ? brief.recommendedFocus.slice(0, 120) + '…'
-            : brief.recommendedFocus;
+    const clean = stripCites(brief.recommendedFocus);
+    const excerpt = clean.length > 120 ? clean.slice(0, 120) + '…' : clean;
 
     return (
-        <div className="mb-5 rounded-xl border border-warm-200 bg-warm-50 p-4">
+        <div>
             <div className="mb-1 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-muted">Current brief — week of {weekLabel}</p>
+                <p className="text-muted text-xs font-semibold">Week of {weekLabel}</p>
             </div>
-            <p className="text-xs text-charcoal">{excerpt}</p>
+            <p className="text-charcoal text-xs">{excerpt}</p>
             <button
                 onClick={() => setExpanded((v) => !v)}
                 className="mt-2 text-xs font-semibold text-teal-700 hover:text-teal-400"
@@ -139,15 +138,15 @@ function BriefCard({ brief }: { brief: TrendsBrief | null }) {
                 <dl className="mt-3 space-y-2 text-xs">
                     {(
                         [
-                            ['Competitor summary', brief.competitorSummary],
-                            ['Trend signals', brief.trendSignals],
-                            ['Seasonal factors', brief.seasonalFactors],
-                            ['Opportunities', brief.opportunities],
+                            ['Competitor summary', stripCites(brief.competitorSummary)],
+                            ['Trend signals', stripCites(brief.trendSignals)],
+                            ['Seasonal factors', stripCites(brief.seasonalFactors)],
+                            ['Opportunities', stripCites(brief.opportunities)],
                         ] as [string, string][]
                     ).map(([label, value]) => (
                         <div key={label}>
-                            <dt className="font-semibold text-muted">{label}</dt>
-                            <dd className="mt-0.5 text-charcoal">{value}</dd>
+                            <dt className="text-muted font-semibold">{label}</dt>
+                            <dd className="text-charcoal mt-0.5">{value}</dd>
                         </div>
                     ))}
                 </dl>
@@ -156,10 +155,87 @@ function BriefCard({ brief }: { brief: TrendsBrief | null }) {
     );
 }
 
+// ── Editable brief panel ───────────────────────────────────────────────────────
+
+const BRIEF_FIELDS: { key: keyof TrendsBrief; label: string; rows: number }[] = [
+    { key: 'recommendedFocus', label: 'Recommended focus', rows: 3 },
+    { key: 'competitorSummary', label: 'Competitor summary', rows: 3 },
+    { key: 'trendSignals', label: 'Trend signals', rows: 3 },
+    { key: 'seasonalFactors', label: 'Seasonal factors', rows: 2 },
+    { key: 'opportunities', label: 'Opportunities', rows: 2 },
+];
+
+function EditableBriefPanel({ brief, onSaved }: { brief: TrendsBrief; onSaved: (updated: TrendsBrief) => void }) {
+    const [fields, setFields] = useState({
+        competitorSummary: stripCites(brief.competitorSummary),
+        trendSignals: stripCites(brief.trendSignals),
+        seasonalFactors: stripCites(brief.seasonalFactors),
+        recommendedFocus: stripCites(brief.recommendedFocus),
+        opportunities: stripCites(brief.opportunities),
+    });
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+
+    async function handleSave() {
+        setSaving(true);
+        setSaved(false);
+        setSaveError(null);
+        try {
+            const { brief: updated } = await updateTrendsBrief(brief.id, fields);
+            onSaved(updated);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2500);
+        } catch (err) {
+            setSaveError(err instanceof Error ? err.message : 'Failed to save');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    const weekLabel = (() => {
+        try {
+            return new Date(brief.weekOf).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+        } catch {
+            return brief.weekOf;
+        }
+    })();
+
+    return (
+        <div>
+            <p className="text-muted mb-3 text-[11px] font-semibold">Week of {weekLabel}</p>
+            <div className="space-y-3">
+                {BRIEF_FIELDS.map(({ key, label, rows }) => (
+                    <div key={key}>
+                        <label className="text-muted mb-1 block text-[11px] font-semibold uppercase tracking-wide">{label}</label>
+                        <textarea
+                            value={fields[key as keyof typeof fields]}
+                            onChange={(e) => setFields((prev) => ({ ...prev, [key]: e.target.value }))}
+                            rows={rows}
+                            className="border-warm-200 bg-warm-50 text-charcoal w-full resize-none rounded-lg border px-2.5 py-2 text-xs focus:border-teal-400 focus:outline-none"
+                        />
+                    </div>
+                ))}
+            </div>
+            {saveError && (
+                <p className="mt-2 text-xs text-red-600">{saveError}</p>
+            )}
+            <button
+                onClick={() => void handleSave()}
+                disabled={saving}
+                className="mt-3 rounded-lg bg-teal-700 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
+            >
+                {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save brief'}
+            </button>
+        </div>
+    );
+}
+
 function MonitorStep({ onComplete }: { onComplete: () => void }) {
     const [terms, setTerms] = useState<string[]>([]);
     const [termsLoading, setTermsLoading] = useState(true);
-    const [brief, setBrief] = useState<TrendsBrief | null>(null);
+    const [priorBrief, setPriorBrief] = useState<TrendsBrief | null>(null);
+    const [newBrief, setNewBrief] = useState<TrendsBrief | null>(null);
     const [briefLoading, setBriefLoading] = useState(true);
     const [saveAsDefaults, setSaveAsDefaults] = useState(false);
     const [state, setState] = useState<RunState>('idle');
@@ -179,8 +255,8 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
             .finally(() => setTermsLoading(false));
 
         getLatestTrends()
-            .then(({ brief: b }) => setBrief(b))
-            .catch(() => setBrief(null))
+            .then(({ brief: b }) => setPriorBrief(b))
+            .catch(() => setPriorBrief(null))
             .finally(() => setBriefLoading(false));
     }, []);
 
@@ -233,6 +309,9 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
             onComplete() {
                 setState('done');
                 stopRef.current = null;
+                getLatestTrends()
+                    .then(({ brief: b }) => setNewBrief(b))
+                    .catch(() => {});
             },
             onError(err) {
                 setState('error');
@@ -250,168 +329,203 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
     }
 
     return (
-        <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Step 1 · Market Research</p>
-            <p className="mb-5 text-sm text-charcoal">
-                The monitor searches the web for competitor activity and Perth wellness trends, then saves a brief used
-                by the campaign planner. Review and adjust the search terms below before running.
-            </p>
+        <div className="grid grid-cols-2 gap-5">
+            {/* Left: main step panel */}
+            <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
+                <p className="text-muted mb-1 text-xs font-semibold tracking-wide uppercase">
+                    Step 1 · Market Research
+                </p>
+                <p className="text-charcoal mb-5 text-sm">
+                    The monitor searches the web for competitor activity and Perth wellness trends, then saves a brief
+                    used by the campaign planner. Review and adjust the search terms below before running.
+                </p>
 
-            {/* Current brief card */}
-            {briefLoading ? (
-                <div className="mb-5 h-12 w-full animate-pulse rounded-xl bg-warm-100" />
-            ) : (
-                <BriefCard brief={brief} />
-            )}
+                {error && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {error}
+                    </div>
+                )}
 
-            {error && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    {error}
-                </div>
-            )}
+                {/* Search terms list */}
+                <div className="mb-4">
+                    <label className="text-muted mb-2 block text-xs font-medium">Search terms</label>
+                    {termsLoading ? (
+                        <div className="bg-warm-100 h-24 w-full animate-pulse rounded-xl" />
+                    ) : (
+                        <div className="space-y-2">
+                            {terms.map((term, i) => (
+                                <div key={i} className="flex items-start gap-2">
+                                    <span className="text-muted mt-2 w-5 shrink-0 text-right text-xs font-semibold">
+                                        {i + 1}.
+                                    </span>
+                                    <textarea
+                                        value={term}
+                                        onChange={(e) => updateTerm(i, e.target.value)}
+                                        disabled={state === 'running'}
+                                        rows={2}
+                                        className="border-warm-200 bg-warm-50 text-charcoal flex-1 resize-none rounded-xl border px-3 py-2 text-xs focus:border-teal-400 focus:outline-none disabled:opacity-60"
+                                    />
+                                    <button
+                                        onClick={() => removeTerm(i)}
+                                        disabled={state === 'running'}
+                                        className="text-muted mt-1.5 rounded-lg p-1.5 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                                        title="Remove"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            ))}
 
-            {/* Search terms list */}
-            <div className="mb-4">
-                <label className="mb-2 block text-xs font-medium text-muted">Search terms</label>
-                {termsLoading ? (
-                    <div className="h-24 w-full animate-pulse rounded-xl bg-warm-100" />
-                ) : (
-                    <div className="space-y-2">
-                        {terms.map((term, i) => (
-                            <div key={i} className="flex items-center gap-2">
-                                <span className="w-5 shrink-0 text-right text-xs font-semibold text-muted">{i + 1}.</span>
-                                <input
-                                    type="text"
-                                    value={term}
-                                    onChange={(e) => updateTerm(i, e.target.value)}
-                                    disabled={state === 'running'}
-                                    className="flex-1 rounded-xl border border-warm-200 bg-warm-50 px-3 py-2 text-xs text-charcoal focus:border-teal-400 focus:outline-none disabled:opacity-60"
-                                />
+                            <div className="flex items-center gap-2 pt-1">
                                 <button
-                                    onClick={() => removeTerm(i)}
+                                    onClick={addTerm}
                                     disabled={state === 'running'}
-                                    className="rounded-lg p-1.5 text-muted transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                                    title="Remove"
+                                    className="border-warm-200 text-muted flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold transition hover:border-teal-400 hover:text-teal-700 disabled:opacity-40"
                                 >
-                                    <Trash2 size={14} />
+                                    <Plus size={13} /> Add query
+                                </button>
+                                <button
+                                    onClick={() => void handleSuggest()}
+                                    disabled={suggesting || state === 'running'}
+                                    className="border-warm-200 text-muted flex items-center gap-1.5 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold transition hover:border-teal-400 hover:text-teal-700 disabled:opacity-40"
+                                >
+                                    {suggesting ? (
+                                        <>
+                                            <span className="h-3 w-3 animate-spin rounded-full border border-teal-400 border-t-transparent" />
+                                            Suggesting…
+                                        </>
+                                    ) : (
+                                        'Suggest with AI'
+                                    )}
                                 </button>
                             </div>
-                        ))}
+                        </div>
+                    )}
+                </div>
 
-                        <div className="flex items-center gap-2 pt-1">
+                {/* AI suggestions panel */}
+                {suggestError && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {suggestError}
+                    </div>
+                )}
+                {suggestions && (
+                    <div className="border-warm-200 bg-warm-50 mb-4 rounded-xl border p-4">
+                        <div className="mb-2 flex items-center justify-between">
+                            <p className="text-muted text-xs font-semibold">AI suggestions</p>
                             <button
-                                onClick={addTerm}
-                                disabled={state === 'running'}
-                                className="flex items-center gap-1.5 rounded-lg border border-warm-200 bg-white px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-teal-400 hover:text-teal-700 disabled:opacity-40"
+                                onClick={() => setSuggestions(null)}
+                                className="text-muted hover:text-charcoal text-xs"
                             >
-                                <Plus size={13} /> Add query
+                                ✕ Dismiss
+                            </button>
+                        </div>
+                        <ul className="mb-3 space-y-1">
+                            {suggestions.map((s, i) => (
+                                <li key={i} className="text-charcoal text-xs">
+                                    {i + 1}. {s}
+                                </li>
+                            ))}
+                        </ul>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => {
+                                    setTerms(suggestions);
+                                    setSuggestions(null);
+                                }}
+                                className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-600"
+                            >
+                                Replace all
                             </button>
                             <button
-                                onClick={() => void handleSuggest()}
-                                disabled={suggesting || state === 'running'}
-                                className="flex items-center gap-1.5 rounded-lg border border-warm-200 bg-white px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-teal-400 hover:text-teal-700 disabled:opacity-40"
+                                onClick={() => {
+                                    setTerms((prev) => [...prev, ...suggestions]);
+                                    setSuggestions(null);
+                                }}
+                                className="border-warm-200 text-muted rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold transition hover:border-teal-400 hover:text-teal-700"
                             >
-                                {suggesting ? (
-                                    <>
-                                        <span className="h-3 w-3 animate-spin rounded-full border border-teal-400 border-t-transparent" />
-                                        Suggesting…
-                                    </>
-                                ) : (
-                                    'Suggest with AI'
-                                )}
+                                Add to list
                             </button>
                         </div>
                     </div>
                 )}
+
+                <ProgressLog entries={log} state={state} />
+
+                {/* Save as defaults checkbox */}
+                <label className="text-muted mt-4 flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                        type="checkbox"
+                        checked={saveAsDefaults}
+                        onChange={(e) => setSaveAsDefaults(e.target.checked)}
+                        disabled={state === 'running'}
+                        className="border-warm-200 rounded"
+                    />
+                    Save as defaults before running
+                </label>
+
+                <div className="mt-4 flex items-center gap-3">
+                    {state === 'done' ? (
+                        <>
+                            <button
+                                onClick={handleRerun}
+                                className="border-warm-200 text-muted rounded-lg border bg-white px-4 py-2 text-sm font-semibold transition hover:border-teal-400 hover:text-teal-700"
+                            >
+                                Re-run
+                            </button>
+                            <button
+                                onClick={onComplete}
+                                className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-600"
+                            >
+                                Continue to Campaign Plan →
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                onClick={() => void handleRun()}
+                                disabled={state === 'running' || termsLoading}
+                                className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
+                            >
+                                {state === 'running' ? 'Running…' : 'Run Research'}
+                            </button>
+                            <button
+                                onClick={onComplete}
+                                disabled={state === 'running'}
+                                className="text-muted hover:text-charcoal text-sm font-semibold transition disabled:opacity-40"
+                            >
+                                Skip →
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
 
-            {/* AI suggestions panel */}
-            {suggestError && (
-                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                    {suggestError}
-                </div>
-            )}
-            {suggestions && (
-                <div className="mb-4 rounded-xl border border-warm-200 bg-warm-50 p-4">
-                    <div className="mb-2 flex items-center justify-between">
-                        <p className="text-xs font-semibold text-muted">AI suggestions</p>
-                        <button
-                            onClick={() => setSuggestions(null)}
-                            className="text-xs text-muted hover:text-charcoal"
-                        >
-                            ✕ Dismiss
-                        </button>
-                    </div>
-                    <ul className="mb-3 space-y-1">
-                        {suggestions.map((s, i) => (
-                            <li key={i} className="text-xs text-charcoal">
-                                {i + 1}. {s}
-                            </li>
-                        ))}
-                    </ul>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => { setTerms(suggestions); setSuggestions(null); }}
-                            className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-600"
-                        >
-                            Replace all
-                        </button>
-                        <button
-                            onClick={() => { setTerms((prev) => [...prev, ...suggestions]); setSuggestions(null); }}
-                            className="rounded-lg border border-warm-200 bg-white px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-teal-400 hover:text-teal-700"
-                        >
-                            Add to list
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            <ProgressLog entries={log} state={state} />
-
-            {/* Save as defaults checkbox */}
-            <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-muted">
-                <input
-                    type="checkbox"
-                    checked={saveAsDefaults}
-                    onChange={(e) => setSaveAsDefaults(e.target.checked)}
-                    disabled={state === 'running'}
-                    className="rounded border-warm-200"
-                />
-                Save as defaults before running
-            </label>
-
-            <div className="mt-4 flex items-center gap-3">
-                {state === 'done' ? (
+            {/* Right: brief panel */}
+            <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
+                {newBrief ? (
                     <>
-                        <button
-                            onClick={handleRerun}
-                            className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-muted transition hover:border-teal-400 hover:text-teal-700"
-                        >
-                            Re-run
-                        </button>
-                        <button
-                            onClick={onComplete}
-                            className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-600"
-                        >
-                            Continue to Campaign Plan →
-                        </button>
+                        <p className="text-muted mb-3 text-xs font-semibold uppercase tracking-wide">New Brief</p>
+                        <EditableBriefPanel brief={newBrief} onSaved={(updated) => setNewBrief(updated)} />
+                        {priorBrief && priorBrief.id !== newBrief.id && (
+                            <div className="mt-5 border-t border-warm-200 pt-5">
+                                <p className="text-muted mb-3 text-xs font-semibold uppercase tracking-wide">Previous Brief</p>
+                                <BriefCard brief={priorBrief} />
+                            </div>
+                        )}
                     </>
                 ) : (
                     <>
-                        <button
-                            onClick={() => void handleRun()}
-                            disabled={state === 'running' || termsLoading}
-                            className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
-                        >
-                            {state === 'running' ? 'Running…' : 'Run Research'}
-                        </button>
-                        <button
-                            onClick={onComplete}
-                            disabled={state === 'running'}
-                            className="text-sm font-semibold text-muted transition hover:text-charcoal disabled:opacity-40"
-                        >
-                            Skip →
-                        </button>
+                        <p className="text-muted mb-3 text-xs font-semibold uppercase tracking-wide">Current Brief</p>
+                        {briefLoading ? (
+                            <div className="space-y-2">
+                                <div className="bg-warm-100 h-3 w-3/4 animate-pulse rounded" />
+                                <div className="bg-warm-100 h-3 w-full animate-pulse rounded" />
+                                <div className="bg-warm-100 h-3 w-5/6 animate-pulse rounded" />
+                            </div>
+                        ) : (
+                            <BriefCard brief={priorBrief} />
+                        )}
                     </>
                 )}
             </div>
@@ -433,7 +547,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
 
     useEffect(() => {
         getCampaignPrompt()
-            .then(({ prompt: p }) => setPrompt(p))
+            .then(({ prompt: p }) => setPrompt(stripCites(p)))
             .catch(() => setPrompt(''))
             .finally(() => setPromptLoading(false));
     }, []);
@@ -464,15 +578,15 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
         // Reload prompt so it picks up the latest trends brief
         setPromptLoading(true);
         getCampaignPrompt()
-            .then(({ prompt: p }) => setPrompt(p))
+            .then(({ prompt: p }) => setPrompt(stripCites(p)))
             .catch(() => {})
             .finally(() => setPromptLoading(false));
     }
 
     return (
-        <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Step 2 · Campaign Plan</p>
-            <p className="mb-5 text-sm text-charcoal">
+        <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
+            <p className="text-muted mb-1 text-xs font-semibold tracking-wide uppercase">Step 2 · Campaign Plan</p>
+            <p className="text-charcoal mb-5 text-sm">
                 The campaign planner uses the latest trends brief and Fresha booking signals to generate a 4-week
                 campaign. Add your own brief below to steer the focus.
             </p>
@@ -484,7 +598,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
             )}
 
             <div className="mb-4">
-                <label className="mb-1.5 block text-xs font-medium text-muted">
+                <label className="text-muted mb-1.5 block text-xs font-medium">
                     Owner brief <span className="font-normal">(optional)</span>
                 </label>
                 <textarea
@@ -493,7 +607,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
                     disabled={state === 'running'}
                     placeholder="e.g. Focus on the new recovery massage package launching next week…"
                     rows={3}
-                    className="w-full resize-none rounded-xl border border-warm-200 bg-warm-50 px-3 py-2.5 text-sm text-charcoal placeholder:text-muted focus:border-teal-400 focus:outline-none disabled:opacity-60"
+                    className="border-warm-200 bg-warm-50 text-charcoal placeholder:text-muted w-full resize-none rounded-xl border px-3 py-2.5 text-sm focus:border-teal-400 focus:outline-none disabled:opacity-60"
                 />
             </div>
 
@@ -507,17 +621,17 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
                 {showPrompt && (
                     <div className="mt-2">
                         {promptLoading ? (
-                            <div className="h-48 w-full animate-pulse rounded-xl bg-warm-100" />
+                            <div className="bg-warm-100 h-48 w-full animate-pulse rounded-xl" />
                         ) : (
                             <textarea
                                 value={prompt}
                                 onChange={(e) => setPrompt(e.target.value)}
                                 disabled={state === 'running'}
                                 rows={16}
-                                className="w-full resize-y rounded-xl border border-warm-200 bg-warm-50 px-3 py-2.5 font-mono text-xs text-charcoal focus:border-teal-400 focus:outline-none disabled:opacity-60"
+                                className="border-warm-200 bg-warm-50 text-charcoal w-full resize-y rounded-xl border px-3 py-2.5 font-mono text-xs focus:border-teal-400 focus:outline-none disabled:opacity-60"
                             />
                         )}
-                        <p className="mt-1 text-xs text-muted">
+                        <p className="text-muted mt-1 text-xs">
                             When the full prompt is visible, it overrides the owner brief above.
                         </p>
                     </div>
@@ -525,19 +639,17 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
             </div>
 
             {state === 'running' && (
-                <div className="mb-5 flex items-center gap-3 rounded-xl border border-warm-200 bg-warm-50 px-4 py-3">
+                <div className="border-warm-200 bg-warm-50 mb-5 flex items-center gap-3 rounded-xl border px-4 py-3">
                     <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-                    <p className="text-xs text-muted">{statusMsg}</p>
+                    <p className="text-muted text-xs">{statusMsg}</p>
                 </div>
             )}
 
             {state === 'done' && campaign && (
                 <div className="mb-5 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
                     <p className="text-xs font-semibold text-teal-700">✓ Campaign generated</p>
-                    <p className="mt-0.5 text-sm font-semibold text-charcoal">{campaign.title}</p>
-                    {campaign.description && (
-                        <p className="mt-1 text-xs text-muted">{campaign.description}</p>
-                    )}
+                    <p className="text-charcoal mt-0.5 text-sm font-semibold">{campaign.title}</p>
+                    {campaign.description && <p className="text-muted mt-1 text-xs">{campaign.description}</p>}
                 </div>
             )}
 
@@ -546,7 +658,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
                     <>
                         <button
                             onClick={handleRerun}
-                            className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-muted transition hover:border-teal-400 hover:text-teal-700"
+                            className="border-warm-200 text-muted rounded-lg border bg-white px-4 py-2 text-sm font-semibold transition hover:border-teal-400 hover:text-teal-700"
                         >
                             Re-generate
                         </button>
@@ -561,7 +673,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
                     <button
                         onClick={() => void handleRun()}
                         disabled={state === 'running' || promptLoading}
-                        className="rounded-lg bg-teal-400 px-5 py-2 text-sm font-semibold text-charcoal transition hover:brightness-110 disabled:opacity-50"
+                        className="text-charcoal rounded-lg bg-teal-400 px-5 py-2 text-sm font-semibold transition hover:brightness-110 disabled:opacity-50"
                     >
                         {state === 'running' ? 'Generating…' : 'Generate Campaign'}
                     </button>
@@ -589,7 +701,7 @@ export default function NewCampaignWizardPage() {
         <>
             <PageHeader title="New Campaign" subtitle="Research trends, then generate a campaign plan" />
 
-            <div className="mx-auto max-w-2xl">
+            <div className={`mx-auto`}>
                 <Stepper current={step} />
 
                 {step === 1 && <MonitorStep onComplete={handleMonitorDone} />}

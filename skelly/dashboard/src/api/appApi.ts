@@ -187,6 +187,19 @@ export function getLatestTrends(): Promise<{ brief: TrendsBrief | null }> {
     return fetchJson('/api/bodyspace/trends/latest');
 }
 
+export function updateTrendsBrief(
+    id: string,
+    patch: {
+        competitorSummary: string;
+        trendSignals: string;
+        seasonalFactors: string;
+        recommendedFocus: string;
+        opportunities: string;
+    },
+): Promise<{ ok: boolean; brief: TrendsBrief }> {
+    return patchJson(`/api/bodyspace/trends/${id}`, patch);
+}
+
 export function approveCampaign(id: string, notes?: string): Promise<{ ok: boolean }> {
     return postJson(`/api/bodyspace/campaigns/${id}/approve`, { notes });
 }
