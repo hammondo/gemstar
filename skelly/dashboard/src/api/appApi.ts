@@ -1,4 +1,5 @@
-import { fetchJson, patchJson, postJson } from './http';
+import { fetchJson, patchJson, postForm, postJson, streamSSE, type SSECallbacks } from './http';
+export type { SSECallbacks };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -183,4 +184,38 @@ export function approvePost(id: string, copy?: string): Promise<{ ok: boolean }>
 
 export function rejectPost(id: string, reason?: string): Promise<{ ok: boolean }> {
     return postJson(`/api/bodyspace/posts/${id}/reject`, { reason });
+}
+
+// ── Agent triggers ────────────────────────────────────────────────────────────
+
+export interface MonitorProgress {
+    type: string;
+    message: string;
+}
+
+export function runFreshaWatcher(): Promise<{ ok: boolean }> {
+    return postJson('/api/bodyspace/run/fresha');
+}
+
+export function streamMonitor(callbacks: SSECallbacks<MonitorProgress>): () => void {
+    return streamSSE('/api/bodyspace/run/monitor/stream', callbacks);
+}
+
+export function runCampaignPlanner(ownerBrief?: string): Promise<{ ok: boolean }> {
+    return postJson('/api/bodyspace/run/campaign', { ownerBrief });
+}
+
+export function runAll(ownerBrief?: string): Promise<{ ok: boolean }> {
+    return postJson('/api/bodyspace/run/all', { ownerBrief });
+}
+
+export function scheduleCampaigns(): Promise<{ ok: boolean }> {
+    return postJson('/api/bodyspace/schedule');
+}
+
+export function importFreshaCsv(csvContent: string, filename: string): Promise<{ ok: boolean; signals?: unknown }> {
+    const form = new FormData();
+    form.append('csvContent', csvContent);
+    form.append('filename', filename);
+    return postForm('/api/bodyspace/fresha/import', form);
 }

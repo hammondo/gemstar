@@ -34,3 +34,43 @@ export async function postJson<T>(path: string, body: unknown = {}): Promise<T> 
     });
     return handleResponse<T>(response);
 }
+
+export async function postForm<T>(path: string, body: FormData): Promise<T> {
+    const response = await fetch(`${apiBaseUrl}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        body,
+    });
+    return handleResponse<T>(response);
+}
+
+export interface SSECallbacks<T> {
+    onProgress?: (data: T) => void;
+    onComplete?: () => void;
+    onError?: (error: string) => void;
+}
+
+export function streamSSE<T>(path: string, callbacks: SSECallbacks<T>): () => void {
+    const source = new EventSource(`${apiBaseUrl}${path}`);
+
+    source.addEventListener('progress', (event) => {
+        callbacks.onProgress?.(JSON.parse((event as MessageEvent).data) as T);
+    });
+
+    source.addEventListener('complete', () => {
+        source.close();
+        callbacks.onComplete?.();
+    });
+
+    source.addEventListener('error', (event) => {
+        if (event instanceof MessageEvent) {
+            const data = JSON.parse(event.data) as { message: string };
+            callbacks.onError?.(data.message);
+        } else {
+            callbacks.onError?.('Connection lost');
+        }
+        source.close();
+    });
+
+    return () => source.close();
+}

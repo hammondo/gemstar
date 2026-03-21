@@ -4,6 +4,7 @@ import { type AuthUser, getMe, logout as apiLogout } from './api/appApi';
 import { config } from './config';
 import logo from './assets/logo.png';
 import AppLayout from './layouts/AppLayout';
+import AgentsPage from './pages/AgentsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
@@ -68,6 +69,7 @@ export default function App() {
         <Routes>
             <Route element={<AppLayout user={user} onLogout={handleLogout} />}>
                 <Route index element={<DashboardPage />} />
+                <Route path="agents" element={<AgentsPage />} />
                 <Route path="campaigns" element={<CampaignsPage />} />
                 <Route path="campaigns/:id" element={<CampaignDetailPage />} />
                 <Route path="posts" element={<PostsPage />} />

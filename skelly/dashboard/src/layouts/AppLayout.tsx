@@ -1,6 +1,7 @@
 import {
     Activity,
     BarChart3,
+    Bot,
     FileText,
     LayoutDashboard,
     LogOut,
@@ -26,6 +27,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
     { to: '/',          icon: LayoutDashboard, label: 'Dashboard',  end: true },
+    { to: '/agents',    icon: Bot,             label: 'Agents' },
     { to: '/campaigns', icon: Megaphone,       label: 'Campaigns' },
     { to: '/posts',     icon: FileText,        label: 'Posts' },
     { to: '/signals',   icon: Activity,        label: 'Signals' },
