@@ -84,8 +84,6 @@ export interface IgAccountData {
     username: string;
     followersCount: number;
     mediaCount: number;
-    reach7d: number;
-    impressions7d: number;
 }
 
 export interface IgPostData {
@@ -96,25 +94,29 @@ export interface IgPostData {
     permalink: string;
     likeCount: number;
     commentsCount: number;
-    engagement: number;
+    views: number;
+    reach: number;
+    saved: number;
+    shares: number;
+    totalInteractions: number;
+}
+
+export interface FbInsightRow {
+    date: string;
+    [metric: string]: number | string;
 }
 
 export interface FbPageData {
     name: string;
     fanCount: number;
-    reach7d: number;
-    impressions7d: number;
-    engagedUsers7d: number;
+    series: FbInsightRow[];
+    metrics: string[];
 }
 
 export interface FbPostData {
     id: string;
     message: string;
     createdTime: string;
-    impressions: number;
-    reach: number;
-    engagements: number;
-    clicks: number;
 }
 
 export type MetaAnalyticsResult =

@@ -3,6 +3,9 @@ import {
     Bar,
     BarChart,
     Cell,
+    Legend,
+    Line,
+    LineChart,
     Pie,
     PieChart,
     ResponsiveContainer,
@@ -13,6 +16,7 @@ import {
 import {
     type AvailabilitySignal,
     type Campaign,
+    type FbInsightRow,
     type MetaAnalyticsResult,
     type SocialPost,
     getCampaigns,
@@ -82,6 +86,118 @@ function SectionCard({ title, children }: { title: string; children: React.React
 
 function labelFor(key: string) {
     return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ── FB insight config ─────────────────────────────────────────────────────────
+
+const FB_METRIC_LABELS: Record<string, string> = {
+    page_impressions_unique: 'Unique reach',
+    page_impressions_paid_unique: 'Paid reach',
+    page_impressions_viral_unique: 'Viral reach',
+    page_posts_impressions_unique: 'Post reach',
+    page_posts_impressions_organic_unique: 'Organic post reach',
+    page_posts_impressions_paid_unique: 'Paid post reach',
+    page_post_engagements: 'Engagements',
+    page_follows: 'New follows',
+    page_daily_follows: 'Daily follows',
+};
+
+const FB_METRIC_COLOURS: Record<string, string> = {
+    page_impressions_unique: '#1877f2',
+    page_impressions_paid_unique: '#f97316',
+    page_impressions_viral_unique: '#a855f7',
+    page_posts_impressions_unique: '#60a5fa',
+    page_posts_impressions_organic_unique: '#22c55e',
+    page_posts_impressions_paid_unique: '#f59e0b',
+    page_post_engagements: '#ef4444',
+    page_follows: '#14b8a6',
+    page_daily_follows: '#06b6d4',
+};
+
+// Group metrics into separate charts so scales don't clash
+const FB_CHART_GROUPS = [
+    {
+        title: 'Reach & impressions (28 days)',
+        metrics: [
+            'page_impressions_unique',
+            'page_posts_impressions_unique',
+            'page_posts_impressions_organic_unique',
+            'page_posts_impressions_paid_unique',
+            'page_impressions_paid_unique',
+            'page_impressions_viral_unique',
+        ],
+    },
+    {
+        title: 'Engagement (28 days)',
+        metrics: ['page_post_engagements'],
+    },
+    {
+        title: 'Follows (28 days)',
+        metrics: ['page_follows', 'page_daily_follows'],
+    },
+];
+
+function FbInsightsCharts({ series, metrics }: { series: FbInsightRow[]; metrics: string[] }) {
+    const fmtDate = (d: string) =>
+        new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+
+    return (
+        <div className="mb-6 space-y-6">
+            {FB_CHART_GROUPS.map((group) => {
+                const activeMetrics = group.metrics.filter((m) => metrics.includes(m));
+                if (activeMetrics.length === 0) return null;
+                return (
+                    <SectionCard key={group.title} title={group.title}>
+                        <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={series} margin={{ left: 8, right: 24, top: 8, bottom: 4 }}>
+                                <XAxis
+                                    dataKey="date"
+                                    tickFormatter={fmtDate}
+                                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                                    interval="preserveStartEnd"
+                                />
+                                <YAxis
+                                    allowDecimals={false}
+                                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                                    width={48}
+                                    tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v)}
+                                />
+                                <Tooltip
+                                    content={({ active, payload, label }) =>
+                                        active && payload?.length ? (
+                                            <div className="rounded-lg border border-warm-200 bg-white px-3 py-2 text-xs shadow space-y-0.5">
+                                                <p className="font-semibold text-charcoal mb-1">{fmtDate(label as string)}</p>
+                                                {payload.map((p) => (
+                                                    <p key={p.dataKey as string} style={{ color: p.color }}>
+                                                        {FB_METRIC_LABELS[p.dataKey as string] ?? p.dataKey}: {(p.value as number).toLocaleString()}
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        ) : null
+                                    }
+                                />
+                                <Legend
+                                    formatter={(value) => FB_METRIC_LABELS[value] ?? value}
+                                    wrapperStyle={{ fontSize: 11 }}
+                                />
+                                {activeMetrics.map((m) => (
+                                    <Line
+                                        key={m}
+                                        type="monotone"
+                                        dataKey={m}
+                                        stroke={FB_METRIC_COLOURS[m] ?? '#9ca3af'}
+                                        strokeWidth={2}
+                                        dot={false}
+                                        activeDot={{ r: 4 }}
+                                    />
+                                ))}
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </SectionCard>
+                );
+            })}
+        </div>
+    );
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -506,7 +622,7 @@ export default function AnalyticsPage() {
                             </div>
 
                             <div className="mb-8">
-                                <SectionCard title="Top Instagram posts by engagement">
+                                <SectionCard title="Top Instagram posts by interactions">
                                     {meta.instagram.recentPosts.length === 0 ? (
                                         <p className="text-sm text-muted">No posts found.</p>
                                     ) : (
@@ -516,9 +632,13 @@ export default function AnalyticsPage() {
                                                     <tr className="border-b border-warm-200 text-left text-xs font-semibold uppercase tracking-wider text-muted">
                                                         <th className="pb-3 pr-4">Caption</th>
                                                         <th className="pb-3 pr-4">Type</th>
+                                                        <th className="pb-3 pr-4 text-right">Views</th>
+                                                        <th className="pb-3 pr-4 text-right">Reach</th>
                                                         <th className="pb-3 pr-4 text-right">Likes</th>
                                                         <th className="pb-3 pr-4 text-right">Comments</th>
-                                                        <th className="pb-3 text-right">Engagement</th>
+                                                        <th className="pb-3 pr-4 text-right">Saves</th>
+                                                        <th className="pb-3 pr-4 text-right">Shares</th>
+                                                        <th className="pb-3 text-right">Interactions</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-warm-200">
@@ -542,9 +662,13 @@ export default function AnalyticsPage() {
                                                                     {p.mediaType}
                                                                 </span>
                                                             </td>
+                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.views.toLocaleString()}</td>
+                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.reach.toLocaleString()}</td>
                                                             <td className="py-3 pr-4 text-right text-charcoal">{p.likeCount.toLocaleString()}</td>
                                                             <td className="py-3 pr-4 text-right text-charcoal">{p.commentsCount.toLocaleString()}</td>
-                                                            <td className="py-3 text-right font-semibold text-teal-700">{p.engagement.toLocaleString()}</td>
+                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.saved.toLocaleString()}</td>
+                                                            <td className="py-3 pr-4 text-right text-charcoal">{p.shares.toLocaleString()}</td>
+                                                            <td className="py-3 text-right font-semibold text-teal-700">{p.totalInteractions.toLocaleString()}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -564,45 +688,16 @@ export default function AnalyticsPage() {
                                 <h3 className="text-sm font-semibold text-charcoal">Facebook — {meta.facebook.page.name}</h3>
                             </div>
 
-                            <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                            <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-2">
                                 <StatCard label="Page likes" value={meta.facebook.page.fanCount.toLocaleString()} />
-                                <StatCard label="Reach (7 days)" value={meta.facebook.page.reach7d.toLocaleString()} />
-                                <StatCard label="Impressions (7 days)" value={meta.facebook.page.impressions7d.toLocaleString()} />
-                                <StatCard label="Engaged users (7 days)" value={meta.facebook.page.engagedUsers7d.toLocaleString()} />
                             </div>
 
-                            <div className="mb-6">
-                                <SectionCard title="Recent Facebook posts">
-                                    {meta.facebook.recentPosts.length === 0 ? (
-                                        <p className="text-sm text-muted">No posts found.</p>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full border-collapse text-sm">
-                                                <thead>
-                                                    <tr className="border-b border-warm-200 text-left text-xs font-semibold uppercase tracking-wider text-muted">
-                                                        <th className="pb-3 pr-4">Post</th>
-                                                        <th className="pb-3 text-right">Date</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-warm-200">
-                                                    {meta.facebook.recentPosts.map((p) => (
-                                                        <tr key={p.id} className="hover:bg-warm-100">
-                                                            <td className="py-3 pr-4">
-                                                                <p className="max-w-sm truncate text-charcoal">
-                                                                    {p.message.slice(0, 120) || '(no text)'}
-                                                                </p>
-                                                            </td>
-                                                            <td className="py-3 text-right text-xs text-muted whitespace-nowrap">
-                                                                {new Date(p.createdTime).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </SectionCard>
-                            </div>
+                            {meta.facebook.page.series.length > 0 && (
+                                <FbInsightsCharts
+                                    series={meta.facebook.page.series}
+                                    metrics={meta.facebook.page.metrics}
+                                />
+                            )}
                         </>
                     )}
                 </>

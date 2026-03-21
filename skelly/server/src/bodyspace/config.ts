@@ -43,9 +43,10 @@ export const settings = {
 
     // Meta (Facebook / Instagram) analytics
     metaAccessToken: process.env.META_ACCESS_TOKEN ?? '',
+    metaPageAccessToken: process.env.META_PAGE_ACCESS_TOKEN ?? '',
     metaPageId: process.env.META_PAGE_ID ?? '',
     metaIgUserId: process.env.META_IG_USER_ID ?? '',
-    metaApiVersion: process.env.META_API_VERSION ?? 'v21.0',
+    metaApiVersion: process.env.META_API_VERSION ?? 'v25.0',
 
     // Microsoft authentication (Azure app registration)
     msClientId: process.env.MS_CLIENT_ID ?? '',
