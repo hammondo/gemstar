@@ -10,6 +10,7 @@ export default function CampaignDetailPage() {
     const [campaign, setCampaign] = useState<Campaign | null>(null);
     const [loading, setLoading] = useState(true);
     const [acting, setActing] = useState<'approving' | 'rejecting' | null>(null);
+    const [notes, setNotes] = useState('');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -24,7 +25,7 @@ export default function CampaignDetailPage() {
         if (!id) return;
         setActing('approving');
         try {
-            await approveCampaign(id);
+            await approveCampaign(id, notes.trim() || undefined);
             const { campaign: c } = await getCampaign(id);
             setCampaign(c);
         } catch (err) {
@@ -107,6 +108,55 @@ export default function CampaignDetailPage() {
                 </Link>
                 <Badge value={campaign.status} />
             </div>
+
+            {/* Approval notes */}
+            {campaign.status === 'pending_review' && (
+                <div className="mb-6 rounded-2xl border border-warm-200 bg-white p-5 shadow-sm">
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-muted">
+                        Approval notes <span className="normal-case font-normal">(optional)</span>
+                    </label>
+                    <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Any instructions or context for the campaign…"
+                        rows={3}
+                        className="w-full resize-none rounded-xl border border-warm-200 bg-warm-50 px-3 py-2 text-sm text-charcoal placeholder:text-muted focus:border-teal-400 focus:outline-none"
+                    />
+                </div>
+            )}
+
+            {/* Campaign metadata */}
+            {(campaign.description || campaign.theme || campaign.ownerNotes) && (
+                <div className="mb-6 rounded-2xl border border-warm-200 bg-white p-5 shadow-sm">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Campaign details</p>
+                    <dl className="space-y-2 text-sm">
+                        {campaign.description && (
+                            <div>
+                                <dt className="text-xs text-muted">Description</dt>
+                                <dd className="mt-0.5 text-charcoal">{campaign.description}</dd>
+                            </div>
+                        )}
+                        {campaign.theme && (
+                            <div>
+                                <dt className="text-xs text-muted">Theme</dt>
+                                <dd className="mt-0.5 text-charcoal">{campaign.theme}</dd>
+                            </div>
+                        )}
+                        {campaign.targetServices && campaign.targetServices.length > 0 && (
+                            <div>
+                                <dt className="text-xs text-muted">Target services</dt>
+                                <dd className="mt-0.5 text-charcoal">{campaign.targetServices.join(', ')}</dd>
+                            </div>
+                        )}
+                        {campaign.ownerNotes && (
+                            <div>
+                                <dt className="text-xs text-muted">Owner notes</dt>
+                                <dd className="mt-0.5 text-charcoal">{campaign.ownerNotes}</dd>
+                            </div>
+                        )}
+                    </dl>
+                </div>
+            )}
 
             {/* Posts */}
             <div className="flex flex-wrap gap-6">

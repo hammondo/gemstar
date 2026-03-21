@@ -1,6 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { type SocialPost, approvePost, getPost, rejectPost, updatePost } from '../api/appApi';
+import {
+    type SocialPost,
+    approvePost,
+    approvePostImage,
+    getPost,
+    regeneratePostImage,
+    regeneratePostImageWithFile,
+    rejectPost,
+    updatePost,
+} from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
 import PostPreview from '../components/PostPreview';
@@ -17,6 +26,12 @@ export default function PostDetailPage() {
     const [acting, setActing] = useState<'approving' | 'rejecting' | null>(null);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [imageFeedback, setImageFeedback] = useState('');
+    const [imageRefUrl, setImageRefUrl] = useState('');
+    const [imageRefFile, setImageRefFile] = useState<File | null>(null);
+    const [imageActing, setImageActing] = useState<'generating' | 'approving' | null>(null);
+    const [imageError, setImageError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!id) return;
@@ -61,6 +76,45 @@ export default function PostDetailPage() {
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to approve');
             setActing(null);
+        }
+    }
+
+    async function handleImageGenerate() {
+        if (!id || !post) return;
+        setImageActing('generating');
+        setImageError(null);
+        try {
+            let result;
+            if (imageRefFile) {
+                result = await regeneratePostImageWithFile(post.id, post.campaignId, {
+                    feedback: imageFeedback || undefined,
+                    file: imageRefFile,
+                });
+            } else {
+                result = await regeneratePostImage(post.id, post.campaignId, {
+                    feedback: imageFeedback || undefined,
+                    referenceImageUrl: imageRefUrl || undefined,
+                });
+            }
+            setPost(result.post);
+        } catch (err) {
+            setImageError(err instanceof Error ? err.message : 'Failed to generate image');
+        } finally {
+            setImageActing(null);
+        }
+    }
+
+    async function handleImageApprove() {
+        if (!id || !post) return;
+        setImageActing('approving');
+        setImageError(null);
+        try {
+            const result = await approvePostImage(post.id);
+            setPost(result.post);
+        } catch (err) {
+            setImageError(err instanceof Error ? err.message : 'Failed to approve image');
+        } finally {
+            setImageActing(null);
         }
     }
 
@@ -202,10 +256,95 @@ export default function PostDetailPage() {
                         </div>
                     </div>
 
+                    {/* Image panel */}
+                    <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
+                        <div className="mb-4 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Image</p>
+                            {post.imageStatus && (
+                                <Badge value={post.imageStatus} />
+                            )}
+                        </div>
+
+                        {post.imageUrl && (
+                            <img
+                                src={post.imageUrl}
+                                alt="Post image"
+                                className="mb-4 w-full rounded-xl border border-warm-200 object-cover"
+                            />
+                        )}
+
+                        {imageError && (
+                            <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                                {imageError}
+                            </p>
+                        )}
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="mb-1 block text-xs font-medium text-muted">Feedback for regeneration</label>
+                                <textarea
+                                    value={imageFeedback}
+                                    onChange={(e) => setImageFeedback(e.target.value)}
+                                    placeholder="e.g. Make it warmer, more inviting…"
+                                    rows={2}
+                                    className="w-full resize-none rounded-xl border border-warm-200 bg-warm-100 px-3 py-2 text-xs text-charcoal placeholder:text-muted focus:border-teal-400 focus:outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-xs font-medium text-muted">Reference image URL</label>
+                                <input
+                                    type="url"
+                                    value={imageRefUrl}
+                                    onChange={(e) => { setImageRefUrl(e.target.value); setImageRefFile(null); }}
+                                    placeholder="https://…"
+                                    className="w-full rounded-xl border border-warm-200 bg-warm-100 px-3 py-2 text-xs text-charcoal placeholder:text-muted focus:border-teal-400 focus:outline-none"
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <label className="cursor-pointer rounded-lg border border-warm-200 bg-warm-50 px-3 py-1.5 text-xs font-medium text-charcoal transition hover:bg-warm-100">
+                                    {imageRefFile ? imageRefFile.name : 'Or upload reference'}
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="sr-only"
+                                        onChange={(e) => { setImageRefFile(e.target.files?.[0] ?? null); setImageRefUrl(''); }}
+                                    />
+                                </label>
+                                {imageRefFile && (
+                                    <button onClick={() => { setImageRefFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-xs text-muted hover:text-charcoal">
+                                        Remove
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => void handleImageGenerate()}
+                                    disabled={!!imageActing}
+                                    className="flex-1 rounded-lg bg-teal-400 px-3 py-2 text-xs font-semibold text-charcoal transition hover:brightness-110 disabled:opacity-50"
+                                >
+                                    {imageActing === 'generating' ? 'Generating…' : post.imageUrl ? 'Regenerate' : 'Generate'}
+                                </button>
+                                {post.imageStatus === 'draft' && (
+                                    <button
+                                        onClick={() => void handleImageApprove()}
+                                        disabled={!!imageActing}
+                                        className="flex-1 rounded-lg bg-teal-700 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
+                                    >
+                                        {imageActing === 'approving' ? 'Approving…' : 'Approve image'}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Details</p>
                         <dl className="space-y-2 text-sm">
-                            {post.hashtags.length > 0 && (
+                            {post.hashtags?.length > 0 && (
                                 <div>
                                     <dt className="text-xs text-muted">Hashtags</dt>
                                     <dd className="mt-0.5 text-charcoal">{post.hashtags.join(' ')}</dd>
@@ -217,18 +356,34 @@ export default function PostDetailPage() {
                                     <dd className="mt-0.5 text-charcoal">{post.callToAction}</dd>
                                 </div>
                             )}
+                            {post.contentPillar && (
+                                <div>
+                                    <dt className="text-xs text-muted">Content pillar</dt>
+                                    <dd className="mt-0.5 capitalize text-charcoal">{post.contentPillar.replace(/_/g, ' ')}</dd>
+                                </div>
+                            )}
                             {post.imageDirection && (
                                 <div>
                                     <dt className="text-xs text-muted">Image direction</dt>
                                     <dd className="mt-0.5 text-charcoal">{post.imageDirection}</dd>
                                 </div>
                             )}
+                            {post.rejectionReason && (
+                                <div>
+                                    <dt className="text-xs text-muted">Rejection reason</dt>
+                                    <dd className="mt-0.5 text-red-600">{post.rejectionReason}</dd>
+                                </div>
+                            )}
                             <div>
                                 <dt className="text-xs text-muted">Created</dt>
-                                <dd className="mt-0.5 text-charcoal">
-                                    {new Date(post.createdAt).toLocaleString()}
-                                </dd>
+                                <dd className="mt-0.5 text-charcoal">{new Date(post.createdAt).toLocaleString()}</dd>
                             </div>
+                            {post.publishedAt && (
+                                <div>
+                                    <dt className="text-xs text-muted">Published</dt>
+                                    <dd className="mt-0.5 text-charcoal">{new Date(post.publishedAt).toLocaleString()}</dd>
+                                </div>
+                            )}
                         </dl>
                     </div>
                 </div>

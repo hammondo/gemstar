@@ -29,16 +29,27 @@ export interface SocialPost {
     platform: 'instagram' | 'facebook';
     postType: 'feed' | 'story' | 'reel';
     copy: string;
+    ownerEdit?: string;
     status: PostStatus;
     imageUrl?: string;
     imageStatus?: ImageStatus;
+    imageDirection?: string;
+    hashtags: string[];
+    callToAction?: string;
+    contentPillar?: string;
+    rejectionReason?: string;
     scheduledFor?: string;
+    publishedAt?: string;
     createdAt: string;
 }
 
 export interface Campaign {
     id: string;
     title: string;
+    description?: string;
+    theme?: string;
+    targetServices?: string[];
+    ownerNotes?: string;
     status: CampaignStatus;
     posts: SocialPost[];
     createdAt: string;
@@ -61,6 +72,12 @@ export interface BodyspaceStatus {
         pendingReviewCampaigns: number;
         publishedPosts: number;
         pendingReviewPosts: number;
+    };
+    timezone?: string;
+    schedules?: {
+        freshaWatcher: string;
+        monitor: string;
+        campaignPlanner: string;
     };
 }
 
@@ -170,8 +187,8 @@ export function getLatestTrends(): Promise<{ brief: TrendsBrief | null }> {
     return fetchJson('/api/bodyspace/trends/latest');
 }
 
-export function approveCampaign(id: string): Promise<{ ok: boolean }> {
-    return postJson(`/api/bodyspace/campaigns/${id}/approve`);
+export function approveCampaign(id: string, notes?: string): Promise<{ ok: boolean }> {
+    return postJson(`/api/bodyspace/campaigns/${id}/approve`, { notes });
 }
 
 export function rejectCampaign(id: string, reason?: string): Promise<{ ok: boolean }> {
@@ -184,6 +201,32 @@ export function approvePost(id: string, copy?: string): Promise<{ ok: boolean }>
 
 export function rejectPost(id: string, reason?: string): Promise<{ ok: boolean }> {
     return postJson(`/api/bodyspace/posts/${id}/reject`, { reason });
+}
+
+// ── Image management ──────────────────────────────────────────────────────────
+
+export function approvePostImage(postId: string): Promise<{ ok: boolean; post: SocialPost }> {
+    return postJson(`/api/bodyspace/posts/${postId}/image/approve`);
+}
+
+export function regeneratePostImage(
+    postId: string,
+    campaignId: string,
+    opts: { feedback?: string; referenceImageUrl?: string } = {},
+): Promise<{ ok: boolean; post: SocialPost }> {
+    return postJson(`/api/bodyspace/posts/${postId}/image/regenerate`, { campaignId, ...opts });
+}
+
+export function regeneratePostImageWithFile(
+    postId: string,
+    campaignId: string,
+    opts: { feedback?: string; file?: File } = {},
+): Promise<{ ok: boolean; post: SocialPost }> {
+    const form = new FormData();
+    form.append('campaignId', campaignId);
+    if (opts.feedback) form.append('feedback', opts.feedback);
+    if (opts.file) form.append('referenceImageFile', opts.file);
+    return postForm(`/api/bodyspace/posts/${postId}/image/regenerate`, form);
 }
 
 // ── Agent triggers ────────────────────────────────────────────────────────────
