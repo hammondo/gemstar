@@ -1,9 +1,32 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { type BodyspaceStatus, getBodyspaceStatus, getHealth, getMonitorSearchTerms, saveMonitorSearchTerms } from '../api/appApi';
 import PageHeader from '../components/PageHeader';
 
 const DOW = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+const THEME_COLORS = [
+    { token: 'warm-50',   hex: '#ffffff', usage: 'Input backgrounds' },
+    { token: 'warm-100',  hex: '#F6EEEC', usage: 'Page background (body)' },
+    { token: 'warm-200',  hex: '#eeddd8', usage: 'Borders, dividers' },
+    { token: 'teal-300',  hex: '#b9eae7', usage: 'Light accents, hover tints' },
+    { token: 'teal-400',  hex: '#6fcacb', usage: 'Primary buttons, active highlights' },
+    { token: 'teal-600',  hex: '#3895a1', usage: 'Mid-tone teal accent' },
+    { token: 'teal-700',  hex: '#00627b', usage: 'Headings, dark accent' },
+    { token: 'charcoal',  hex: '#223131', usage: 'Hero header text' },
+    { token: 'muted',     hex: '#555555', usage: 'Secondary / body text' },
+    { token: 'ok',        hex: '#6fcacb', usage: 'Success badges' },
+    { token: 'warn',      hex: '#b87333', usage: 'Warning badges' },
+    { token: 'bad',       hex: '#c25050', usage: 'Error badges' },
+];
+
+function contrastText(hex: string): string {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.slice(0, 2), 16);
+    const g = parseInt(c.slice(2, 4), 16);
+    const b = parseInt(c.slice(4, 6), 16);
+    return r * 0.299 + g * 0.587 + b * 0.114 > 160 ? '#223131' : '#ffffff';
+}
 
 function describeCron(expr: string): string {
     const parts = expr.trim().split(/\s+/);
@@ -47,6 +70,7 @@ export default function SettingsPage() {
     const [error, setError] = useState<string | null>(null);
 
     // Monitor search terms
+    const [themeOpen, setThemeOpen] = useState(false);
     const [terms, setTerms] = useState<string[]>([]);
     const [termsSaving, setTermsSaving] = useState(false);
     const [termsSaved, setTermsSaved] = useState(false);
@@ -209,6 +233,73 @@ export default function SettingsPage() {
                                 >
                                     {termsSaving ? 'Saving…' : termsSaved ? 'Saved ✓' : 'Save'}
                                 </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Theme colours */}
+                <div className="rounded-2xl border border-warm-200 bg-white shadow-sm">
+                    <button
+                        onClick={() => setThemeOpen((v) => !v)}
+                        className="flex w-full items-center justify-between px-6 py-4"
+                    >
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Theme Colours</p>
+                            <p className="mt-0.5 text-xs text-muted">Design tokens aligned to the BodySpace brand.</p>
+                        </div>
+                        <ChevronDown size={16} className={`shrink-0 text-muted transition-transform ${themeOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {themeOpen && (
+                        <div className="border-t border-warm-200">
+                            <div className="overflow-hidden">
+                                <table className="w-full border-collapse text-sm">
+                                    <thead>
+                                        <tr className="border-b border-warm-200 bg-warm-100 text-left text-xs font-semibold uppercase tracking-wider text-muted">
+                                            <th className="px-5 py-3">Swatch</th>
+                                            <th className="px-5 py-3">Token</th>
+                                            <th className="px-5 py-3">Hex</th>
+                                            <th className="px-5 py-3">Usage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {THEME_COLORS.map((c) => (
+                                            <tr key={c.token} className="border-b border-warm-200 last:border-b-0 hover:bg-warm-100">
+                                                <td className="px-5 py-3">
+                                                    <div className="h-8 w-8 rounded-lg border border-warm-200" style={{ backgroundColor: c.hex }} />
+                                                </td>
+                                                <td className="px-5 py-3">
+                                                    <code
+                                                        className="rounded px-1.5 py-0.5 text-xs font-semibold"
+                                                        style={{
+                                                            backgroundColor: c.hex,
+                                                            color: contrastText(c.hex),
+                                                            border: `1px solid ${c.hex === '#ffffff' ? '#eeddd8' : c.hex}`,
+                                                        }}
+                                                    >
+                                                        {c.token}
+                                                    </code>
+                                                </td>
+                                                <td className="px-5 py-3 font-mono text-xs text-muted">{c.hex}</td>
+                                                <td className="px-5 py-3 text-xs text-muted">{c.usage}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div className="border-t border-warm-200 px-6 py-4">
+                                <p className="mb-3 text-xs font-semibold text-charcoal">Fonts</p>
+                                <p className="mb-3 text-xs text-muted">
+                                    <strong>Poppins</strong> (400 / 500 / 600 / 700) via Google Fonts.
+                                </p>
+                                <div className="grid grid-cols-4 gap-3">
+                                    {[400, 500, 600, 700].map((w) => (
+                                        <div key={w} className="rounded-xl border border-warm-200 p-3 text-center">
+                                            <p className="text-2xl text-charcoal" style={{ fontWeight: w }}>Aa</p>
+                                            <p className="mt-1 text-xs text-muted">{w}</p>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}
