@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import express, { Router } from 'express';
 import multer from 'multer';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -8,6 +9,7 @@ import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
 import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
 import { settings } from '../bodyspace/config.js';
+import { getMonitorSearchTerms, saveMonitorSearchTerms } from '../bodyspace/settings-store.js';
 import {
     getCampaignById,
     getCampaignsByStatus,
@@ -496,6 +498,22 @@ bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImag
     }
 });
 
+// ── Settings store ────────────────────────────────────────────────────────────
+
+bodyspaceRouter.get('/settings/monitor-terms', (_req, res) => {
+    res.json({ ok: true, terms: getMonitorSearchTerms() });
+});
+
+bodyspaceRouter.put('/settings/monitor-terms', (req, res) => {
+    const { terms } = req.body as { terms?: unknown };
+    if (!Array.isArray(terms) || !terms.every((t) => typeof t === 'string')) {
+        res.status(400).json({ ok: false, error: 'terms must be an array of strings' });
+        return;
+    }
+    const saved = saveMonitorSearchTerms(terms as string[]);
+    res.json({ ok: true, terms: saved });
+});
+
 // ── Wizard ──────────────────────────────────────────────────────────────────
 
 bodyspaceRouter.get('/wizard/monitor-prompt', (_req, res) => {
@@ -514,7 +532,10 @@ bodyspaceRouter.post('/wizard/monitor/stream', (req, res) => {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    const customPrompt = typeof req.body?.customPrompt === 'string' ? req.body.customPrompt : undefined;
+    const rawTerms = req.body?.terms;
+    const customTerms = Array.isArray(rawTerms) && rawTerms.every((t) => typeof t === 'string')
+        ? (rawTerms as string[])
+        : undefined;
     let closed = false;
     req.on('close', () => { closed = true; });
 
@@ -523,7 +544,7 @@ bodyspaceRouter.post('/wizard/monitor/stream', (req, res) => {
         .runStreaming((progress) => {
             if (closed) return;
             send('progress', progress);
-        }, customPrompt)
+        }, customTerms)
         .then(() => {
             if (!closed) { send('complete', { ok: true }); res.end(); }
         })
@@ -554,6 +575,77 @@ bodyspaceRouter.post('/wizard/campaign', async (req, res) => {
         });
 
         res.json({ ok: true, campaign });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// ── Wizard: suggest monitor search terms ─────────────────────────────────────
+
+bodyspaceRouter.post('/wizard/suggest-terms', async (_req, res) => {
+    try {
+        if (settings.mockAnthropic) {
+            const mockTerms = [
+                '"Perth wellness studio" competitor promotions — look for new service launches or discount offers',
+                '"infrared sauna Perth" — check for new competitors or trending content',
+                '"lymphatic drainage Perth" — track awareness and demand growth',
+                '"recovery massage Cockburn" OR "Jandakot massage" — local competitor activity',
+                '"Perth autumn wellness" — seasonal lifestyle content and booking trends',
+            ];
+            res.json({ ok: true, terms: mockTerms });
+            return;
+        }
+
+        if (!settings.anthropicApiKey) {
+            res.status(500).json({ ok: false, error: 'ANTHROPIC_API_KEY is not configured' });
+            return;
+        }
+
+        const client = new Anthropic({ apiKey: settings.anthropicApiKey });
+        const monthName = new Date().toLocaleString('en-AU', { month: 'long', timeZone: 'Australia/Perth' });
+
+        const message = await client.messages.create({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 600,
+            messages: [
+                {
+                    role: 'user',
+                    content: `Suggest 3-5 specific web search queries for BodySpace Recovery Studio market research. BodySpace is a wellness studio in Jandakot (Cockburn area), Perth, Western Australia offering massage, infrared sauna, NormaTec recovery boots, BodyROLL lymphatic machine, Reiki, and other wellness services.
+
+The current month is ${monthName}. Focus on:
+- Competitor activity in Perth/Cockburn/southern suburbs
+- Wellness trends relevant to Perth/Australia right now
+- Perth seasonal factors for ${monthName}
+
+Return ONLY a JSON array of strings. Each string should be a full search instruction in this format: "query here" — what to look for. No preamble, no markdown, just the JSON array.`,
+                },
+            ],
+        });
+
+        let text = '';
+        for (const block of message.content) {
+            if (block.type === 'text') text += block.text;
+        }
+
+        let terms: string[];
+        try {
+            let clean = text.trim();
+            if (clean.startsWith('```')) {
+                const parts = clean.split('```');
+                clean = parts[1] ?? '';
+                if (clean.startsWith('json')) clean = clean.slice(4);
+            }
+            const parsed = JSON.parse(clean) as unknown;
+            if (!Array.isArray(parsed) || !parsed.every((t) => typeof t === 'string')) {
+                throw new Error('Not an array of strings');
+            }
+            terms = parsed as string[];
+        } catch {
+            res.status(500).json({ ok: false, error: 'Failed to parse AI response as JSON array' });
+            return;
+        }
+
+        res.json({ ok: true, terms });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

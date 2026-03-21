@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { settings } from '../../config.js';
 import { getLatestTrendsBrief, saveTrendsBrief } from '../../db.js';
+import { getMonitorSearchTerms } from '../../settings-store.js';
 import type { GeneratedTrendsBrief, TrendsBrief } from '../../types.js';
 import { getAgentLogger } from '../../utils/logger.js';
 
@@ -67,11 +68,11 @@ export class MonitorAgent {
         return brief;
     }
 
-    async runStreaming(onProgress: OnProgress, customPrompt?: string): Promise<TrendsBrief> {
+    async runStreaming(onProgress: OnProgress, customTerms?: string[]): Promise<TrendsBrief> {
         this.log.info('Starting weekly research (streaming)');
         onProgress({ type: 'status', message: 'Building research prompt...' });
 
-        const prompt = customPrompt ?? this.buildPrompt();
+        const prompt = this.buildPrompt(customTerms);
         onProgress({
             type: 'status',
             message: 'Starting Claude research with web search...',
@@ -92,7 +93,7 @@ export class MonitorAgent {
         return brief;
     }
 
-    public buildPrompt(): string {
+    public buildPrompt(customTerms?: string[]): string {
         const today = new Date().toLocaleDateString('en-AU', {
             weekday: 'long',
             day: 'numeric',
@@ -100,23 +101,20 @@ export class MonitorAgent {
             year: 'numeric',
             timeZone: 'Australia/Perth',
         });
-        const month = new Date().toLocaleString('en-AU', {
-            month: 'long',
-            timeZone: 'Australia/Perth',
-        });
+
+        const terms = customTerms ?? getMonitorSearchTerms();
+        const tasksSection = terms
+            .map((t, i) => `${i + 1}. Search: ${t}`)
+            .join('\n\n');
 
         return `
 Today is ${today}.
 
 Research and produce a weekly intelligence brief for BodySpace Recovery Studio (Jandakot, Perth WA).
 
-RESEARCH TASKS (perform up to 5 focused searches total):
+RESEARCH TASKS (perform up to ${terms.length} focused searches total):
 
-1. Search: "wellness studio Cockburn Perth" OR "massage infrared sauna southern Perth" — summarise any competitor promos or new services.
-
-2. Search: "infrared sauna lymphatic drainage wellness trends Perth Australia 2026" — identify rising trends relevant to BodySpace.
-
-3. Search: "Perth ${month} wellness FIFO lifestyle" — capture seasonal and lifestyle context for this month.
+${tasksSection}
 
 Return ONLY valid JSON matching this exact schema:
 {

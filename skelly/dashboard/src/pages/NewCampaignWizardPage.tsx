@@ -1,13 +1,17 @@
-import { Check } from 'lucide-react';
+import { Check, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     type Campaign,
     type MonitorProgress,
+    type TrendsBrief,
     getCampaignPrompt,
-    getMonitorPrompt,
-    runCampaignWizard,
+    getLatestTrends,
+    getMonitorSearchTerms,
+    saveMonitorSearchTerms,
     streamMonitorWizard,
+    suggestMonitorTerms,
+    runCampaignWizard,
 } from '../api/appApi';
 import PageHeader from '../components/PageHeader';
 
@@ -91,27 +95,136 @@ function ProgressLog({ entries, state }: { entries: string[]; state: RunState })
 
 // ── Step 1 — Monitor ──────────────────────────────────────────────────────────
 
+function BriefCard({ brief }: { brief: TrendsBrief | null }) {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!brief) {
+        return (
+            <div className="mb-5 rounded-xl border border-warm-200 bg-warm-50 p-4">
+                <p className="text-xs italic text-muted">No brief yet — run research to generate one.</p>
+            </div>
+        );
+    }
+
+    const weekLabel = (() => {
+        try {
+            return new Date(brief.weekOf).toLocaleDateString('en-AU', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+            });
+        } catch {
+            return brief.weekOf;
+        }
+    })();
+
+    const excerpt =
+        brief.recommendedFocus.length > 120
+            ? brief.recommendedFocus.slice(0, 120) + '…'
+            : brief.recommendedFocus;
+
+    return (
+        <div className="mb-5 rounded-xl border border-warm-200 bg-warm-50 p-4">
+            <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-muted">Current brief — week of {weekLabel}</p>
+            </div>
+            <p className="text-xs text-charcoal">{excerpt}</p>
+            <button
+                onClick={() => setExpanded((v) => !v)}
+                className="mt-2 text-xs font-semibold text-teal-700 hover:text-teal-400"
+            >
+                {expanded ? '▾ Hide full brief' : '▸ View full brief'}
+            </button>
+            {expanded && (
+                <dl className="mt-3 space-y-2 text-xs">
+                    {(
+                        [
+                            ['Competitor summary', brief.competitorSummary],
+                            ['Trend signals', brief.trendSignals],
+                            ['Seasonal factors', brief.seasonalFactors],
+                            ['Opportunities', brief.opportunities],
+                        ] as [string, string][]
+                    ).map(([label, value]) => (
+                        <div key={label}>
+                            <dt className="font-semibold text-muted">{label}</dt>
+                            <dd className="mt-0.5 text-charcoal">{value}</dd>
+                        </div>
+                    ))}
+                </dl>
+            )}
+        </div>
+    );
+}
+
 function MonitorStep({ onComplete }: { onComplete: () => void }) {
-    const [prompt, setPrompt] = useState('');
-    const [promptLoading, setPromptLoading] = useState(true);
+    const [terms, setTerms] = useState<string[]>([]);
+    const [termsLoading, setTermsLoading] = useState(true);
+    const [brief, setBrief] = useState<TrendsBrief | null>(null);
+    const [briefLoading, setBriefLoading] = useState(true);
+    const [saveAsDefaults, setSaveAsDefaults] = useState(false);
     const [state, setState] = useState<RunState>('idle');
     const [log, setLog] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
     const stopRef = useRef<(() => void) | null>(null);
 
+    // AI suggest state
+    const [suggesting, setSuggesting] = useState(false);
+    const [suggestions, setSuggestions] = useState<string[] | null>(null);
+    const [suggestError, setSuggestError] = useState<string | null>(null);
+
     useEffect(() => {
-        getMonitorPrompt()
-            .then(({ prompt: p }) => setPrompt(p))
-            .catch(() => setPrompt(''))
-            .finally(() => setPromptLoading(false));
+        getMonitorSearchTerms()
+            .then(({ terms: t }) => setTerms(t))
+            .catch(() => setTerms([]))
+            .finally(() => setTermsLoading(false));
+
+        getLatestTrends()
+            .then(({ brief: b }) => setBrief(b))
+            .catch(() => setBrief(null))
+            .finally(() => setBriefLoading(false));
     }, []);
 
-    function handleRun() {
+    function updateTerm(index: number, value: string) {
+        setTerms((prev) => prev.map((t, i) => (i === index ? value : t)));
+    }
+
+    function removeTerm(index: number) {
+        setTerms((prev) => prev.filter((_, i) => i !== index));
+    }
+
+    function addTerm() {
+        setTerms((prev) => [...prev, '']);
+    }
+
+    async function handleSuggest() {
+        setSuggesting(true);
+        setSuggestError(null);
+        setSuggestions(null);
+        try {
+            const { terms: suggested } = await suggestMonitorTerms();
+            setSuggestions(suggested);
+        } catch (err) {
+            setSuggestError(err instanceof Error ? err.message : 'Failed to get suggestions');
+        } finally {
+            setSuggesting(false);
+        }
+    }
+
+    async function handleRun() {
+        const activeTerms = terms.filter((t) => t.trim());
         setState('running');
         setLog([]);
         setError(null);
 
-        const stop = streamMonitorWizard(prompt, {
+        if (saveAsDefaults) {
+            try {
+                await saveMonitorSearchTerms(activeTerms);
+            } catch {
+                // non-fatal — continue with run
+            }
+        }
+
+        const stop = streamMonitorWizard(activeTerms, {
             onProgress(data: MonitorProgress) {
                 if (data.type === 'status' || data.type === 'done') {
                     setLog((prev) => [...prev, data.message]);
@@ -141,8 +254,15 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
             <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Step 1 · Market Research</p>
             <p className="mb-5 text-sm text-charcoal">
                 The monitor searches the web for competitor activity and Perth wellness trends, then saves a brief used
-                by the campaign planner. Review and adjust the research prompt below before running.
+                by the campaign planner. Review and adjust the search terms below before running.
             </p>
+
+            {/* Current brief card */}
+            {briefLoading ? (
+                <div className="mb-5 h-12 w-full animate-pulse rounded-xl bg-warm-100" />
+            ) : (
+                <BriefCard brief={brief} />
+            )}
 
             {error && (
                 <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -150,24 +270,117 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
                 </div>
             )}
 
+            {/* Search terms list */}
             <div className="mb-4">
-                <label className="mb-1.5 block text-xs font-medium text-muted">Research prompt</label>
-                {promptLoading ? (
-                    <div className="h-48 w-full animate-pulse rounded-xl bg-warm-100" />
+                <label className="mb-2 block text-xs font-medium text-muted">Search terms</label>
+                {termsLoading ? (
+                    <div className="h-24 w-full animate-pulse rounded-xl bg-warm-100" />
                 ) : (
-                    <textarea
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        disabled={state === 'running'}
-                        rows={12}
-                        className="w-full resize-y rounded-xl border border-warm-200 bg-warm-50 px-3 py-2.5 font-mono text-xs text-charcoal focus:border-teal-400 focus:outline-none disabled:opacity-60"
-                    />
+                    <div className="space-y-2">
+                        {terms.map((term, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <span className="w-5 shrink-0 text-right text-xs font-semibold text-muted">{i + 1}.</span>
+                                <input
+                                    type="text"
+                                    value={term}
+                                    onChange={(e) => updateTerm(i, e.target.value)}
+                                    disabled={state === 'running'}
+                                    className="flex-1 rounded-xl border border-warm-200 bg-warm-50 px-3 py-2 text-xs text-charcoal focus:border-teal-400 focus:outline-none disabled:opacity-60"
+                                />
+                                <button
+                                    onClick={() => removeTerm(i)}
+                                    disabled={state === 'running'}
+                                    className="rounded-lg p-1.5 text-muted transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                                    title="Remove"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
+                        ))}
+
+                        <div className="flex items-center gap-2 pt-1">
+                            <button
+                                onClick={addTerm}
+                                disabled={state === 'running'}
+                                className="flex items-center gap-1.5 rounded-lg border border-warm-200 bg-white px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-teal-400 hover:text-teal-700 disabled:opacity-40"
+                            >
+                                <Plus size={13} /> Add query
+                            </button>
+                            <button
+                                onClick={() => void handleSuggest()}
+                                disabled={suggesting || state === 'running'}
+                                className="flex items-center gap-1.5 rounded-lg border border-warm-200 bg-white px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-teal-400 hover:text-teal-700 disabled:opacity-40"
+                            >
+                                {suggesting ? (
+                                    <>
+                                        <span className="h-3 w-3 animate-spin rounded-full border border-teal-400 border-t-transparent" />
+                                        Suggesting…
+                                    </>
+                                ) : (
+                                    'Suggest with AI'
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 )}
             </div>
 
+            {/* AI suggestions panel */}
+            {suggestError && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {suggestError}
+                </div>
+            )}
+            {suggestions && (
+                <div className="mb-4 rounded-xl border border-warm-200 bg-warm-50 p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-semibold text-muted">AI suggestions</p>
+                        <button
+                            onClick={() => setSuggestions(null)}
+                            className="text-xs text-muted hover:text-charcoal"
+                        >
+                            ✕ Dismiss
+                        </button>
+                    </div>
+                    <ul className="mb-3 space-y-1">
+                        {suggestions.map((s, i) => (
+                            <li key={i} className="text-xs text-charcoal">
+                                {i + 1}. {s}
+                            </li>
+                        ))}
+                    </ul>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => { setTerms(suggestions); setSuggestions(null); }}
+                            className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-600"
+                        >
+                            Replace all
+                        </button>
+                        <button
+                            onClick={() => { setTerms((prev) => [...prev, ...suggestions]); setSuggestions(null); }}
+                            className="rounded-lg border border-warm-200 bg-white px-3 py-1.5 text-xs font-semibold text-muted transition hover:border-teal-400 hover:text-teal-700"
+                        >
+                            Add to list
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <ProgressLog entries={log} state={state} />
 
-            <div className="mt-5 flex items-center gap-3">
+            {/* Save as defaults checkbox */}
+            <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-muted">
+                <input
+                    type="checkbox"
+                    checked={saveAsDefaults}
+                    onChange={(e) => setSaveAsDefaults(e.target.checked)}
+                    disabled={state === 'running'}
+                    className="rounded border-warm-200"
+                />
+                Save as defaults before running
+            </label>
+
+            <div className="mt-4 flex items-center gap-3">
                 {state === 'done' ? (
                     <>
                         <button
@@ -186,9 +399,9 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
                 ) : (
                     <>
                         <button
-                            onClick={handleRun}
-                            disabled={state === 'running' || promptLoading}
-                            className="rounded-lg bg-teal-400 px-5 py-2 text-sm font-semibold text-charcoal transition hover:brightness-110 disabled:opacity-50"
+                            onClick={() => void handleRun()}
+                            disabled={state === 'running' || termsLoading}
+                            className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
                         >
                             {state === 'running' ? 'Running…' : 'Run Research'}
                         </button>

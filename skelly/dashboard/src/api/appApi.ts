@@ -1,4 +1,4 @@
-import { fetchJson, patchJson, postForm, postJson, streamSSE, streamSSEPost, type SSECallbacks } from './http';
+import { fetchJson, patchJson, postForm, postJson, putJson, streamSSE, streamSSEPost, type SSECallbacks } from './http';
 export type { SSECallbacks };
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -235,14 +235,28 @@ export function regeneratePostImageWithFile(
     return postForm(`/api/bodyspace/posts/${postId}/image/regenerate`, form);
 }
 
+// ── Settings store ────────────────────────────────────────────────────────────
+
+export function getMonitorSearchTerms(): Promise<{ ok: boolean; terms: string[] }> {
+    return fetchJson('/api/bodyspace/settings/monitor-terms');
+}
+
+export function saveMonitorSearchTerms(terms: string[]): Promise<{ ok: boolean; terms: string[] }> {
+    return putJson('/api/bodyspace/settings/monitor-terms', { terms });
+}
+
 // ── Wizard ────────────────────────────────────────────────────────────────────
 
 export function getMonitorPrompt(): Promise<{ ok: boolean; prompt: string }> {
     return fetchJson('/api/bodyspace/wizard/monitor-prompt');
 }
 
-export function streamMonitorWizard(customPrompt: string, callbacks: SSECallbacks<MonitorProgress>): () => void {
-    return streamSSEPost('/api/bodyspace/wizard/monitor/stream', { customPrompt }, callbacks);
+export function streamMonitorWizard(terms: string[], callbacks: SSECallbacks<MonitorProgress>): () => void {
+    return streamSSEPost('/api/bodyspace/wizard/monitor/stream', { terms }, callbacks);
+}
+
+export function suggestMonitorTerms(): Promise<{ ok: boolean; terms: string[] }> {
+    return postJson('/api/bodyspace/wizard/suggest-terms');
 }
 
 export function getCampaignPrompt(): Promise<{ ok: boolean; prompt: string }> {
