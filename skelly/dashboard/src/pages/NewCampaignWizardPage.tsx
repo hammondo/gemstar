@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import {
     type Campaign,
     type MonitorProgress,
+    type ServiceInfo,
     type TrendsBrief,
-    getCampaignPrompt,
     getLatestTrends,
     getMonitorSearchTerms,
+    getServices,
     runCampaignWizard,
     saveMonitorSearchTerms,
     streamMonitorWizard,
@@ -19,7 +20,7 @@ import PageHeader from '../components/PageHeader';
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 function stripCites(text: string): string {
-    return text.replace(/<cite[^>]*>[\s\S]*?<\/cite>/g, '').replace(/\s{2,}/g, ' ').trim();
+    return text.replace(/<\/?cite[^>]*>/g, '').replace(/\s{2,}/g, ' ').trim();
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -537,30 +538,37 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
 
 function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void }) {
     const [ownerBrief, setOwnerBrief] = useState('');
-    const [prompt, setPrompt] = useState('');
-    const [promptLoading, setPromptLoading] = useState(true);
-    const [showPrompt, setShowPrompt] = useState(false);
+    const [services, setServices] = useState<ServiceInfo[]>([]);
+    const [servicesLoading, setServicesLoading] = useState(true);
+    const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
     const [state, setState] = useState<RunState>('idle');
-    const [statusMsg, setStatusMsg] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [campaign, setCampaign] = useState<Campaign | null>(null);
 
     useEffect(() => {
-        getCampaignPrompt()
-            .then(({ prompt: p }) => setPrompt(stripCites(p)))
-            .catch(() => setPrompt(''))
-            .finally(() => setPromptLoading(false));
+        getServices()
+            .then(({ services: s }) => setServices(s))
+            .catch(() => setServices([]))
+            .finally(() => setServicesLoading(false));
     }, []);
+
+    function toggleService(id: string) {
+        setSelectedServices((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
 
     async function handleRun() {
         setState('running');
-        setStatusMsg('Generating campaign — this may take 30–60 seconds…');
         setError(null);
         setCampaign(null);
         try {
             const result = await runCampaignWizard({
                 ownerBrief: ownerBrief.trim() || undefined,
-                customPrompt: showPrompt && prompt.trim() ? prompt.trim() : undefined,
+                selectedServices: selectedServices.size > 0 ? [...selectedServices] : undefined,
             });
             setCampaign(result.campaign);
             setState('done');
@@ -572,23 +580,21 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
 
     function handleRerun() {
         setState('idle');
-        setStatusMsg('');
         setError(null);
         setCampaign(null);
-        // Reload prompt so it picks up the latest trends brief
-        setPromptLoading(true);
-        getCampaignPrompt()
-            .then(({ prompt: p }) => setPrompt(stripCites(p)))
-            .catch(() => {})
-            .finally(() => setPromptLoading(false));
     }
+
+    // Group services by category
+    const byCategory = services.reduce<Record<string, ServiceInfo[]>>((acc, svc) => {
+        (acc[svc.category] ??= []).push(svc);
+        return acc;
+    }, {});
 
     return (
         <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
             <p className="text-muted mb-1 text-xs font-semibold tracking-wide uppercase">Step 2 · Campaign Plan</p>
             <p className="text-charcoal mb-5 text-sm">
-                The campaign planner uses the latest trends brief and Fresha booking signals to generate a 4-week
-                campaign. Add your own brief below to steer the focus.
+                Select the services to promote in this campaign, then add any additional guidance below.
             </p>
 
             {error && (
@@ -597,9 +603,47 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
                 </div>
             )}
 
-            <div className="mb-4">
+            {/* Service selector */}
+            <div className="mb-5">
+                <label className="text-muted mb-2 block text-xs font-medium">
+                    Services to promote <span className="font-normal">(leave empty to use Fresha booking signals)</span>
+                </label>
+                {servicesLoading ? (
+                    <div className="bg-warm-100 h-32 w-full animate-pulse rounded-xl" />
+                ) : (
+                    <div className="border-warm-200 rounded-xl border divide-y divide-warm-100">
+                        {Object.entries(byCategory).map(([category, svcs]) => (
+                            <div key={category} className="px-4 py-3">
+                                <p className="text-muted mb-2 text-[11px] font-semibold uppercase tracking-wide">{category}</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {svcs.map((svc) => {
+                                        const checked = selectedServices.has(svc.id);
+                                        return (
+                                            <button
+                                                key={svc.id}
+                                                onClick={() => toggleService(svc.id)}
+                                                disabled={state === 'running'}
+                                                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
+                                                    checked
+                                                        ? 'border-teal-400 bg-teal-50 text-teal-700'
+                                                        : 'border-warm-200 bg-white text-charcoal hover:border-teal-300'
+                                                }`}
+                                            >
+                                                {checked && <span className="mr-1">✓</span>}
+                                                {svc.name}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="mb-5">
                 <label className="text-muted mb-1.5 block text-xs font-medium">
-                    Owner brief <span className="font-normal">(optional)</span>
+                    Additional guidance <span className="font-normal">(optional)</span>
                 </label>
                 <textarea
                     value={ownerBrief}
@@ -611,37 +655,10 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
                 />
             </div>
 
-            <div className="mb-5">
-                <button
-                    onClick={() => setShowPrompt((v) => !v)}
-                    className="text-xs font-semibold text-teal-700 hover:text-teal-400"
-                >
-                    {showPrompt ? '▾ Hide full prompt' : '▸ Edit full prompt'}
-                </button>
-                {showPrompt && (
-                    <div className="mt-2">
-                        {promptLoading ? (
-                            <div className="bg-warm-100 h-48 w-full animate-pulse rounded-xl" />
-                        ) : (
-                            <textarea
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                                disabled={state === 'running'}
-                                rows={16}
-                                className="border-warm-200 bg-warm-50 text-charcoal w-full resize-y rounded-xl border px-3 py-2.5 font-mono text-xs focus:border-teal-400 focus:outline-none disabled:opacity-60"
-                            />
-                        )}
-                        <p className="text-muted mt-1 text-xs">
-                            When the full prompt is visible, it overrides the owner brief above.
-                        </p>
-                    </div>
-                )}
-            </div>
-
             {state === 'running' && (
                 <div className="border-warm-200 bg-warm-50 mb-5 flex items-center gap-3 rounded-xl border px-4 py-3">
                     <div className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-                    <p className="text-muted text-xs">{statusMsg}</p>
+                    <p className="text-muted text-xs">Generating campaign — this may take 30–60 seconds…</p>
                 </div>
             )}
 
@@ -672,7 +689,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
                 ) : (
                     <button
                         onClick={() => void handleRun()}
-                        disabled={state === 'running' || promptLoading}
+                        disabled={state === 'running' || servicesLoading}
                         className="text-charcoal rounded-lg bg-teal-400 px-5 py-2 text-sm font-semibold transition hover:brightness-110 disabled:opacity-50"
                     >
                         {state === 'running' ? 'Generating…' : 'Generate Campaign'}

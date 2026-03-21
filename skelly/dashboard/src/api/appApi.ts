@@ -183,6 +183,16 @@ export function getSignals(): Promise<{ signals: Record<string, AvailabilitySign
     return fetchJson('/api/bodyspace/signals');
 }
 
+export interface ServiceInfo {
+    id: string;
+    name: string;
+    category: string;
+}
+
+export function getServices(): Promise<{ ok: boolean; services: ServiceInfo[] }> {
+    return fetchJson('/api/bodyspace/services');
+}
+
 export function getLatestTrends(): Promise<{ brief: TrendsBrief | null }> {
     return fetchJson('/api/bodyspace/trends/latest');
 }
@@ -277,8 +287,8 @@ export function getCampaignPrompt(): Promise<{ ok: boolean; prompt: string }> {
 }
 
 export function runCampaignWizard(opts: {
-    customPrompt?: string;
     ownerBrief?: string;
+    selectedServices?: string[];
 }): Promise<{ ok: boolean; campaign: Campaign }> {
     return postJson('/api/bodyspace/wizard/campaign', opts);
 }

@@ -5,7 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { randomUUID } from 'crypto';
 import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
-import { getBrandVoice, settings } from '../../config.js';
+import { getBrandVoice, getServiceById, settings } from '../../config.js';
 import { getLatestSignals, getLatestTrendsBrief, saveCampaign } from '../../db.js';
 import type {
     AvailabilitySignals,
@@ -51,6 +51,7 @@ export class CampaignPlannerAgent {
             trendsBrief?: TrendsBrief | null;
             ownerBrief?: string;
             customPrompt?: string;
+            selectedServices?: string[];
         } = {}
     ): Promise<Campaign> {
         const signals = options.availabilitySignals ?? getLatestSignals();
@@ -64,7 +65,7 @@ export class CampaignPlannerAgent {
             'Computed service availability buckets'
         );
 
-        const prompt = options.customPrompt ?? this.buildPrompt(pushServices, pauseServices, brief, options.ownerBrief);
+        const prompt = options.customPrompt ?? this.buildPrompt(pushServices, pauseServices, brief, options.ownerBrief, options.selectedServices);
         const generated = settings.mockAnthropic ? this.getMockCampaign() : await this.generate(prompt);
         const campaign = this.buildCampaignRecord(generated, signals, brief?.id);
 
@@ -87,17 +88,25 @@ export class CampaignPlannerAgent {
         pushServices: AvailabilitySignals,
         pauseServices: AvailabilitySignals,
         brief: TrendsBrief | null,
-        ownerBrief?: string
+        ownerBrief?: string,
+        selectedServices?: string[]
     ): string {
         const b = this.brand;
         const today = new Date();
         const campaignEnd = addDays(today, 28);
 
-        const pushList = Object.values(pushServices).length
-            ? Object.values(pushServices)
-                  .map((v) => `  - ${v.serviceName} (${v.availableSlots} slots free)`)
+        const pushList = selectedServices?.length
+            ? selectedServices
+                  .map((id) => {
+                      const svc = getServiceById(id);
+                      return `  - ${svc?.name ?? id}`;
+                  })
                   .join('\n')
-            : '  (none — all services have normal availability)';
+            : Object.values(pushServices).length
+              ? Object.values(pushServices)
+                    .map((v) => `  - ${v.serviceName} (${v.availableSlots} slots free)`)
+                    .join('\n')
+              : '  (none — all services have normal availability)';
 
         const pauseList = Object.values(pauseServices).length
             ? Object.values(pauseServices)

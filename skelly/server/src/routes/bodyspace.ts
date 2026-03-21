@@ -8,7 +8,7 @@ import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.j
 import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
 import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
-import { settings } from '../bodyspace/config.js';
+import { getAllServices, settings } from '../bodyspace/config.js';
 import { getMonitorSearchTerms, saveMonitorSearchTerms } from '../bodyspace/settings-store.js';
 import {
     getCampaignById,
@@ -159,6 +159,11 @@ bodyspaceRouter.post('/analytics/meta/refresh', (_req, res) => {
 
 bodyspaceRouter.get('/signals', (_req, res) => {
     res.json({ ok: true, signals: getLatestSignals() });
+});
+
+bodyspaceRouter.get('/services', (_req, res) => {
+    const services = getAllServices().map(({ id, name, category }) => ({ id, name, category }));
+    res.json({ ok: true, services });
 });
 
 bodyspaceRouter.get('/trends/latest', (_req, res) => {
@@ -568,11 +573,11 @@ bodyspaceRouter.get('/wizard/campaign-prompt', (_req, res) => {
 
 bodyspaceRouter.post('/wizard/campaign', async (req, res) => {
     try {
-        const customPrompt = typeof req.body?.customPrompt === 'string' ? req.body.customPrompt : undefined;
         const ownerBrief = typeof req.body?.ownerBrief === 'string' ? req.body.ownerBrief : undefined;
+        const selectedServices = Array.isArray(req.body?.selectedServices) ? req.body.selectedServices as string[] : undefined;
 
         const planner = new CampaignPlannerAgent();
-        const campaign = await planner.run({ customPrompt, ownerBrief });
+        const campaign = await planner.run({ ownerBrief, selectedServices });
 
         const approval = new ApprovalWorkflow();
         await approval.notifyOwner(campaign);
