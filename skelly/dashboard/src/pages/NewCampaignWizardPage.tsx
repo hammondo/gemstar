@@ -2,15 +2,20 @@ import { Check, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+    type AvailabilitySignal,
     type Campaign,
     type MonitorProgress,
     type ServiceInfo,
     type TrendsBrief,
     getLatestTrends,
     getMonitorSearchTerms,
+    getSelectedCampaignServices,
     getServices,
+    getSignals,
     runCampaignWizard,
+    runFreshaWatcher,
     saveMonitorSearchTerms,
+    saveSelectedCampaignServices,
     streamMonitorWizard,
     suggestMonitorTerms,
     updateTrendsBrief,
@@ -541,14 +546,24 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
     const [services, setServices] = useState<ServiceInfo[]>([]);
     const [servicesLoading, setServicesLoading] = useState(true);
     const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
+    const [signals, setSignals] = useState<Record<string, AvailabilitySignal>>({});
+    const [refreshing, setRefreshing] = useState(false);
     const [state, setState] = useState<RunState>('idle');
     const [error, setError] = useState<string | null>(null);
     const [campaign, setCampaign] = useState<Campaign | null>(null);
 
     useEffect(() => {
-        getServices()
-            .then(({ services: s }) => setServices(s))
-            .catch(() => setServices([]))
+        Promise.all([
+            getServices(),
+            getSelectedCampaignServices(),
+            getSignals(),
+        ])
+            .then(([{ services: s }, { services: saved }, { signals: sig }]) => {
+                setServices(s);
+                setSelectedServices(new Set(saved));
+                setSignals(sig);
+            })
+            .catch(() => {})
             .finally(() => setServicesLoading(false));
     }, []);
 
@@ -565,6 +580,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
         setState('running');
         setError(null);
         setCampaign(null);
+        void saveSelectedCampaignServices(selectedServices.size > 0 ? [...selectedServices] : []).catch(() => {});
         try {
             const result = await runCampaignWizard({
                 ownerBrief: ownerBrief.trim() || undefined,
@@ -582,6 +598,34 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
         setState('idle');
         setError(null);
         setCampaign(null);
+    }
+
+    async function handleRefreshFresha() {
+        setRefreshing(true);
+        try {
+            await runFreshaWatcher();
+            const { signals: sig } = await getSignals();
+            setSignals(sig);
+        } catch {
+            // non-fatal
+        } finally {
+            setRefreshing(false);
+        }
+    }
+
+    function signalBadge(id: string) {
+        const sig = signals[id];
+        if (!sig) return null;
+        const color =
+            sig.signal === 'push' ? 'bg-green-400' :
+            sig.signal === 'pause' ? 'bg-red-400' :
+            'bg-warm-300';
+        return (
+            <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-normal opacity-70">
+                <span className={`inline-block h-1.5 w-1.5 rounded-full ${color}`} />
+                {sig.availableSlots}
+            </span>
+        );
     }
 
     // Group services by category
@@ -605,9 +649,43 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
 
             {/* Service selector */}
             <div className="mb-5">
-                <label className="text-muted mb-2 block text-xs font-medium">
-                    Services to promote <span className="font-normal">(leave empty to use Fresha booking signals)</span>
-                </label>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="text-muted text-xs font-medium">
+                        Services to promote <span className="font-normal">(leave empty to use Fresha booking signals)</span>
+                    </label>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            onClick={() => {
+                                const pushIds = Object.values(signals)
+                                    .filter((s) => s.signal === 'push')
+                                    .map((s) => s.serviceId);
+                                setSelectedServices(new Set(pushIds));
+                            }}
+                            disabled={state === 'running' || servicesLoading}
+                            className="border-warm-200 text-muted rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-40"
+                        >
+                            Select push
+                        </button>
+                        <button
+                            onClick={() => setSelectedServices(new Set())}
+                            disabled={state === 'running' || selectedServices.size === 0}
+                            className="border-warm-200 text-muted rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-red-300 hover:text-red-600 disabled:opacity-40"
+                        >
+                            Clear
+                        </button>
+                        <button
+                            onClick={() => void handleRefreshFresha()}
+                            disabled={refreshing || state === 'running'}
+                            className="border-warm-200 text-muted flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-40"
+                        >
+                            {refreshing ? (
+                                <><span className="h-2.5 w-2.5 animate-spin rounded-full border border-teal-400 border-t-transparent" />Refreshing…</>
+                            ) : (
+                                'Refresh Fresha'
+                            )}
+                        </button>
+                    </div>
+                </div>
                 {servicesLoading ? (
                     <div className="bg-warm-100 h-32 w-full animate-pulse rounded-xl" />
                 ) : (
@@ -626,11 +704,14 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
                                                 className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
                                                     checked
                                                         ? 'border-teal-400 bg-teal-50 text-teal-700'
-                                                        : 'border-warm-200 bg-white text-charcoal hover:border-teal-300'
+                                                        : signals[svc.id]?.signal === 'pause'
+                                                          ? 'border-warm-200 bg-warm-50 text-muted opacity-60 hover:border-warm-300'
+                                                          : 'border-warm-200 bg-white text-charcoal hover:border-teal-300'
                                                 }`}
                                             >
                                                 {checked && <span className="mr-1">✓</span>}
                                                 {svc.name}
+                                                {signalBadge(svc.id)}
                                             </button>
                                         );
                                     })}

@@ -268,6 +268,14 @@ export function saveMonitorSearchTerms(terms: string[]): Promise<{ ok: boolean; 
     return putJson('/api/bodyspace/settings/monitor-terms', { terms });
 }
 
+export function getSelectedCampaignServices(): Promise<{ ok: boolean; services: string[] }> {
+    return fetchJson('/api/bodyspace/settings/campaign-services');
+}
+
+export function saveSelectedCampaignServices(ids: string[]): Promise<{ ok: boolean; services: string[] }> {
+    return putJson('/api/bodyspace/settings/campaign-services', { services: ids });
+}
+
 // ── Wizard ────────────────────────────────────────────────────────────────────
 
 export function getMonitorPrompt(): Promise<{ ok: boolean; prompt: string }> {

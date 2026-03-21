@@ -9,7 +9,7 @@ import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
 import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
 import { getAllServices, settings } from '../bodyspace/config.js';
-import { getMonitorSearchTerms, saveMonitorSearchTerms } from '../bodyspace/settings-store.js';
+import { getMonitorSearchTerms, saveMonitorSearchTerms, getSelectedCampaignServices, saveSelectedCampaignServices } from '../bodyspace/settings-store.js';
 import {
     getCampaignById,
     getCampaignsByStatus,
@@ -525,6 +525,20 @@ bodyspaceRouter.put('/settings/monitor-terms', (req, res) => {
     }
     const saved = saveMonitorSearchTerms(terms as string[]);
     res.json({ ok: true, terms: saved });
+});
+
+bodyspaceRouter.get('/settings/campaign-services', (_req, res) => {
+    res.json({ ok: true, services: getSelectedCampaignServices() });
+});
+
+bodyspaceRouter.put('/settings/campaign-services', (req, res) => {
+    const { services: ids } = req.body as { services: unknown };
+    if (!Array.isArray(ids) || !ids.every((s) => typeof s === 'string')) {
+        res.status(400).json({ ok: false, error: 'services must be an array of strings' });
+        return;
+    }
+    const saved = saveSelectedCampaignServices(ids as string[]);
+    res.json({ ok: true, services: saved });
 });
 
 // ── Wizard ──────────────────────────────────────────────────────────────────

@@ -38,3 +38,29 @@ export function saveMonitorSearchTerms(terms: string[]): string[] {
     writeFileSync(monitorTermsPath(), JSON.stringify(terms, null, 2), 'utf8');
     return terms;
 }
+
+// ── Campaign service selection ─────────────────────────────────────────────
+
+function campaignServicesPath(): string {
+    return resolve(settings.dataDir, 'campaign-services.json');
+}
+
+export function getSelectedCampaignServices(): string[] {
+    const path = campaignServicesPath();
+    if (!existsSync(path)) return [];
+    try {
+        const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+        if (Array.isArray(parsed) && parsed.every((t) => typeof t === 'string')) {
+            return parsed as string[];
+        }
+    } catch {
+        // fall through
+    }
+    return [];
+}
+
+export function saveSelectedCampaignServices(ids: string[]): string[] {
+    mkdirSync(settings.dataDir, { recursive: true });
+    writeFileSync(campaignServicesPath(), JSON.stringify(ids, null, 2), 'utf8');
+    return ids;
+}
