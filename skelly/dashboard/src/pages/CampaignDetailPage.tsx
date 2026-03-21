@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { type Campaign, approveCampaign, getCampaign, rejectCampaign } from '../api/appApi';
+import { type Campaign, type PostStatus, approveCampaign, getCampaign, rejectCampaign } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
 import PostPreview from '../components/PostPreview';
@@ -11,6 +11,7 @@ export default function CampaignDetailPage() {
     const [loading, setLoading] = useState(true);
     const [acting, setActing] = useState<'approving' | 'rejecting' | null>(null);
     const [notes, setNotes] = useState('');
+    const [filter, setFilter] = useState<PostStatus | 'all'>('all');
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -69,11 +70,33 @@ export default function CampaignDetailPage() {
 
     const canAct = campaign.status === 'pending_review' && !acting;
 
+    const statusCounts = useMemo(() => {
+        const counts: Partial<Record<PostStatus, number>> = {};
+        for (const p of campaign.posts) {
+            counts[p.status] = (counts[p.status] ?? 0) + 1;
+        }
+        return counts;
+    }, [campaign.posts]);
+
+    const presentStatuses = useMemo(
+        () => (Object.keys(statusCounts) as PostStatus[]).sort(),
+        [statusCounts],
+    );
+
+    const visiblePosts = useMemo(
+        () => (filter === 'all' ? campaign.posts : campaign.posts.filter((p) => p.status === filter)),
+        [campaign.posts, filter],
+    );
+
     return (
         <>
             <PageHeader
                 title={campaign.title}
-                subtitle={`${campaign.posts.length} post${campaign.posts.length !== 1 ? 's' : ''}`}
+                subtitle={
+                    filter === 'all'
+                        ? `${campaign.posts.length} post${campaign.posts.length !== 1 ? 's' : ''}`
+                        : `${visiblePosts.length} of ${campaign.posts.length} posts · ${filter.replace(/_/g, ' ')}`
+                }
                 actions={
                     canAct ? (
                         <>
@@ -158,9 +181,39 @@ export default function CampaignDetailPage() {
                 </div>
             )}
 
+            {/* Post filters */}
+            {presentStatuses.length > 1 && (
+                <div className="mb-5 flex flex-wrap gap-1.5">
+                    <button
+                        onClick={() => setFilter('all')}
+                        className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                            filter === 'all'
+                                ? 'bg-teal-700 text-white'
+                                : 'border border-warm-200 bg-white text-muted hover:border-teal-400 hover:text-teal-700'
+                        }`}
+                    >
+                        All <span className="ml-1 opacity-70">{campaign.posts.length}</span>
+                    </button>
+                    {presentStatuses.map((s) => (
+                        <button
+                            key={s}
+                            onClick={() => setFilter(s)}
+                            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                                filter === s
+                                    ? 'bg-teal-700 text-white'
+                                    : 'border border-warm-200 bg-white text-muted hover:border-teal-400 hover:text-teal-700'
+                            }`}
+                        >
+                            {s.replace(/_/g, ' ')}{' '}
+                            <span className="ml-1 opacity-70">{statusCounts[s]}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Posts */}
             <div className="flex flex-wrap gap-6">
-                {campaign.posts.map((post) => (
+                {visiblePosts.map((post) => (
                     <Link
                         key={post.id}
                         to={`/posts/${post.id}`}
@@ -185,6 +238,9 @@ export default function CampaignDetailPage() {
                         </div>
                     </Link>
                 ))}
+                {visiblePosts.length === 0 && (
+                    <p className="py-8 text-sm text-muted">No posts with this status.</p>
+                )}
             </div>
         </>
     );
