@@ -29,6 +29,12 @@ export default function App() {
             .catch(() => setAuthChecked(true));
     }, []);
 
+    useEffect(() => {
+        const handler = () => setUser(null);
+        window.addEventListener('auth:unauthorized', handler);
+        return () => window.removeEventListener('auth:unauthorized', handler);
+    }, []);
+
     function handleLogout() {
         void apiLogout().then(() => setUser(null));
     }

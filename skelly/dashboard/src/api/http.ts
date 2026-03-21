@@ -5,6 +5,9 @@ const { apiBaseUrl } = config;
 async function handleResponse<T>(response: Response): Promise<T> {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     if (!response.ok) {
+        if (response.status === 401) {
+            window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        }
         throw new Error(payload.error ?? `Request failed with status ${response.status}`);
     }
     return payload as T;
