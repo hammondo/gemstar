@@ -50,6 +50,24 @@ export default function CampaignDetailPage() {
         }
     }
 
+    const statusCounts = useMemo(() => {
+        const counts: Partial<Record<PostStatus, number>> = {};
+        for (const p of campaign?.posts ?? []) {
+            counts[p.status] = (counts[p.status] ?? 0) + 1;
+        }
+        return counts;
+    }, [campaign?.posts]);
+
+    const presentStatuses = useMemo(
+        () => (Object.keys(statusCounts) as PostStatus[]).sort(),
+        [statusCounts],
+    );
+
+    const visiblePosts = useMemo(
+        () => (filter === 'all' ? campaign?.posts ?? [] : (campaign?.posts ?? []).filter((p) => p.status === filter)),
+        [campaign?.posts, filter],
+    );
+
     if (loading) {
         return (
             <>
@@ -69,24 +87,6 @@ export default function CampaignDetailPage() {
     }
 
     const canAct = campaign.status === 'pending_review' && !acting;
-
-    const statusCounts = useMemo(() => {
-        const counts: Partial<Record<PostStatus, number>> = {};
-        for (const p of campaign.posts) {
-            counts[p.status] = (counts[p.status] ?? 0) + 1;
-        }
-        return counts;
-    }, [campaign.posts]);
-
-    const presentStatuses = useMemo(
-        () => (Object.keys(statusCounts) as PostStatus[]).sort(),
-        [statusCounts],
-    );
-
-    const visiblePosts = useMemo(
-        () => (filter === 'all' ? campaign.posts : campaign.posts.filter((p) => p.status === filter)),
-        [campaign.posts, filter],
-    );
 
     return (
         <>
