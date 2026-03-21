@@ -1,0 +1,14 @@
+services:
+  gemstar:
+    image: bodyspace/gemstar
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - server/.env.production
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

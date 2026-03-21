@@ -12,7 +12,7 @@ dotenv.config();
 
 const app = express();
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
-const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5174')
+const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000,http://localhost:5174')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
@@ -32,7 +32,8 @@ app.use(
         cookie: {
             httpOnly: true,
             sameSite: 'lax',
-            secure: settings.nodeEnv === 'production',
+            // Set COOKIE_SECURE=true only when running behind HTTPS (e.g. behind a reverse proxy)
+            secure: process.env.COOKIE_SECURE === 'true',
             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         },
     })
@@ -42,12 +43,10 @@ app.use('/api', apiRouter);
 
 // Serve dashboard SPA in production
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dashboardDist = resolve(
-    process.env.DASHBOARD_DIST_PATH ?? join(__dirname, '../../dashboard/dist')
-);
+const dashboardDist = resolve(process.env.DASHBOARD_DIST_PATH ?? join(__dirname, '../../dashboard/dist'));
 if (existsSync(dashboardDist)) {
     app.use(express.static(dashboardDist));
-    app.get('*', (_req, res) => res.sendFile(join(dashboardDist, 'index.html')));
+    app.get('*path', (_req, res) => res.sendFile(join(dashboardDist, 'index.html')));
 } else {
     app.get('/', (_req, res) => {
         res.json({ message: 'Skelly API running', bodyspaceApi: '/api/bodyspace' });
