@@ -217,6 +217,12 @@ export function regeneratePostImage(
     return postJson(`/api/bodyspace/posts/${postId}/image/regenerate`, { campaignId, ...opts });
 }
 
+export function uploadPostImage(postId: string, file: File): Promise<{ ok: boolean; post: SocialPost }> {
+    const form = new FormData();
+    form.append('imageFile', file);
+    return postForm(`/api/bodyspace/posts/${postId}/image/upload`, form);
+}
+
 export function regeneratePostImageWithFile(
     postId: string,
     campaignId: string,

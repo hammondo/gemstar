@@ -9,6 +9,7 @@ import {
     regeneratePostImageWithFile,
     rejectPost,
     updatePost,
+    uploadPostImage,
 } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
@@ -29,9 +30,11 @@ export default function PostDetailPage() {
     const [imageFeedback, setImageFeedback] = useState('');
     const [imageRefUrl, setImageRefUrl] = useState('');
     const [imageRefFile, setImageRefFile] = useState<File | null>(null);
-    const [imageActing, setImageActing] = useState<'generating' | 'approving' | null>(null);
+    const [imageActing, setImageActing] = useState<'generating' | 'approving' | 'uploading' | null>(null);
     const [imageError, setImageError] = useState<string | null>(null);
+    const [imageUploadFile, setImageUploadFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const uploadInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (!id) return;
@@ -113,6 +116,22 @@ export default function PostDetailPage() {
             setPost(result.post);
         } catch (err) {
             setImageError(err instanceof Error ? err.message : 'Failed to approve image');
+        } finally {
+            setImageActing(null);
+        }
+    }
+
+    async function handleImageUpload() {
+        if (!id || !imageUploadFile) return;
+        setImageActing('uploading');
+        setImageError(null);
+        try {
+            const result = await uploadPostImage(id, imageUploadFile);
+            setPost(result.post);
+            setImageUploadFile(null);
+            if (uploadInputRef.current) uploadInputRef.current.value = '';
+        } catch (err) {
+            setImageError(err instanceof Error ? err.message : 'Failed to upload image');
         } finally {
             setImageActing(null);
         }
@@ -207,7 +226,7 @@ export default function PostDetailPage() {
             </div>
 
             <div className="grid gap-6 lg:grid-cols-2">
-                {/* Edit panel */}
+                {/* Left column: copy, schedule, preview */}
                 <div className="space-y-5">
                     <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
                         <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted">
@@ -245,17 +264,17 @@ export default function PostDetailPage() {
                             className="w-full rounded-xl border border-warm-200 bg-warm-100 px-3 py-2 text-sm text-charcoal focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400 disabled:opacity-60"
                         />
                     </div>
-                </div>
 
-                {/* Preview panel */}
-                <div className="space-y-5">
                     <div className="rounded-2xl border border-warm-200 bg-white p-5 shadow-sm">
                         <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted">Live preview</p>
                         <div className="flex justify-center">
                             <PostPreview post={{ ...post, ownerEdit: copy }} />
                         </div>
                     </div>
+                </div>
 
+                {/* Right column: image, details */}
+                <div className="space-y-5">
                     {/* Image panel */}
                     <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
                         <div className="mb-4 flex items-center justify-between">
@@ -279,9 +298,47 @@ export default function PostDetailPage() {
                             </p>
                         )}
 
+                        {/* Upload your own image */}
+                        <div className="mb-4 space-y-2">
+                            <p className="text-xs font-medium text-muted">Upload your own image</p>
+                            <div className="flex items-center gap-2">
+                                <label className="cursor-pointer rounded-lg border border-warm-200 bg-warm-50 px-3 py-1.5 text-xs font-medium text-charcoal transition hover:bg-warm-100">
+                                    {imageUploadFile ? imageUploadFile.name : 'Choose image…'}
+                                    <input
+                                        ref={uploadInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="sr-only"
+                                        onChange={(e) => setImageUploadFile(e.target.files?.[0] ?? null)}
+                                    />
+                                </label>
+                                {imageUploadFile && (
+                                    <>
+                                        <button
+                                            onClick={() => void handleImageUpload()}
+                                            disabled={!!imageActing}
+                                            className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
+                                        >
+                                            {imageActing === 'uploading' ? 'Uploading…' : 'Use this image'}
+                                        </button>
+                                        <button
+                                            onClick={() => { setImageUploadFile(null); if (uploadInputRef.current) uploadInputRef.current.value = ''; }}
+                                            className="text-xs text-muted hover:text-charcoal"
+                                        >
+                                            Remove
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mb-4 border-t border-warm-100" />
+
+                        {/* AI generation */}
                         <div className="space-y-3">
+                            <p className="text-xs font-medium text-muted">AI generation</p>
                             <div>
-                                <label className="mb-1 block text-xs font-medium text-muted">Feedback for regeneration</label>
+                                <label className="mb-1 block text-xs text-muted">Feedback</label>
                                 <textarea
                                     value={imageFeedback}
                                     onChange={(e) => setImageFeedback(e.target.value)}
@@ -292,7 +349,7 @@ export default function PostDetailPage() {
                             </div>
 
                             <div>
-                                <label className="mb-1 block text-xs font-medium text-muted">Reference image URL</label>
+                                <label className="mb-1 block text-xs text-muted">Reference image URL</label>
                                 <input
                                     type="url"
                                     value={imageRefUrl}

@@ -400,6 +400,32 @@ bodyspaceRouter.post('/posts/:id/image', (req, res) => {
     }
 });
 
+// Upload an owner image directly (bypasses AI — saves file and sets as draft)
+bodyspaceRouter.post('/posts/:id/image/upload', upload.single('imageFile'), (req, res) => {
+    try {
+        const postId = req.params.id as string;
+        const file = req.file;
+        if (!file) {
+            res.status(400).json({ ok: false, error: 'imageFile is required' });
+            return;
+        }
+        const ext = file.mimetype.split('/')[1] ?? 'jpg';
+        const uploadDir = resolve(settings.dataDir, 'images', postId);
+        mkdirSync(uploadDir, { recursive: true });
+        const filename = `upload.${ext}`;
+        const dest = resolve(uploadDir, filename);
+        const buffer = readFileSync(file.path);
+        writeFileSync(dest, buffer);
+        unlinkSync(file.path);
+        const imageUrl = `${settings.apiBaseUrl}/api/bodyspace/images/${postId}/${filename}`;
+        updatePostImage(postId, imageUrl, 'draft');
+        const post = getPostById(postId);
+        res.json({ ok: true, post });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
 // Approve the current image draft so the post becomes schedulable
 bodyspaceRouter.post('/posts/:id/image/approve', async (req, res) => {
     try {
@@ -417,7 +443,8 @@ bodyspaceRouter.post('/posts/:id/image/approve', async (req, res) => {
         updatePostImage(postId, post.imageUrl, 'approved');
 
         const blogSync = await trySyncApprovedPostToBlog(postId);
-        res.json({ ok: true, postId, imageStatus: 'approved', blogSync });
+        const updatedPost = getPostById(postId);
+        res.json({ ok: true, post: updatedPost, blogSync });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
