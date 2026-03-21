@@ -81,8 +81,8 @@ export const settings = {
     // Misc
     logLevel: process.env.LOG_LEVEL ?? 'info',
     nodeEnv: process.env.NODE_ENV ?? 'development',
-    dataDir: resolve(ROOT, 'data'),
-    configDir: resolve(ROOT, 'config'),
+    dataDir: process.env.DATA_DIR ?? resolve(ROOT, 'data'),
+    configDir: process.env.CONFIG_DIR ?? resolve(ROOT, 'config'),
 } as const;
 
 // ─── YAML config loaders ──────────────────────────────────────────────────

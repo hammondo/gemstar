@@ -368,7 +368,7 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
                                         value={term}
                                         onChange={(e) => updateTerm(i, e.target.value)}
                                         disabled={state === 'running'}
-                                        rows={2}
+                                        rows={3}
                                         className="border-warm-200 bg-warm-50 text-charcoal flex-1 resize-none rounded-xl border px-3 py-2 text-xs focus:border-teal-400 focus:outline-none disabled:opacity-60"
                                     />
                                     <button
