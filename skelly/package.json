@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "Skelly monorepo app scaffold",
-  "workspaces": [
-    "server",
-    "dashboard"
-  ],
   "scripts": {
     "dev": "concurrently -k -n SERVER,DASHBOARD -c cyan,yellow \"npm --prefix server run dev\" \"npm --prefix dashboard run dev\"",
     "dev:server": "npm --prefix server run dev",
