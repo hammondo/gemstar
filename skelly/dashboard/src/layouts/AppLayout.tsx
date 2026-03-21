@@ -5,6 +5,7 @@ import {
     LayoutDashboard,
     LogOut,
     Megaphone,
+    Palette,
     Settings,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
     { to: '/signals',   icon: Activity,        label: 'Signals' },
     { to: '/analytics', icon: BarChart3,       label: 'Analytics' },
     { to: '/settings',  icon: Settings,        label: 'Settings' },
+    { to: '/theme',     icon: Palette,         label: 'Theme Colours' },
 ];
 
 export default function AppLayout({ user, onLogout }: AppLayoutProps) {

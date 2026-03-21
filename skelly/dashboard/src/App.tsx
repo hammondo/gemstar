@@ -12,6 +12,7 @@ import PostDetailPage from './pages/PostDetailPage';
 import PostsPage from './pages/PostsPage';
 import SettingsPage from './pages/SettingsPage';
 import SignalsPage from './pages/SignalsPage';
+import ThemeColorsPage from './pages/ThemeColorsPage';
 
 export default function App() {
     const [authChecked, setAuthChecked] = useState(false);
@@ -74,6 +75,7 @@ export default function App() {
                 <Route path="signals" element={<SignalsPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="theme" element={<ThemeColorsPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>
