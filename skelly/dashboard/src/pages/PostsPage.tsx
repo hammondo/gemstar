@@ -17,7 +17,7 @@ export default function PostsPage() {
         getCampaigns()
             .then(({ campaigns }) => {
                 const flat: FlatPost[] = campaigns.flatMap((c: Campaign) =>
-                    c.posts.map((p) => ({ ...p, campaignTitle: c.title })),
+                    c.posts.map((p) => ({ ...p, campaignTitle: c.name })),
                 );
                 flat.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
                 setPosts(flat);

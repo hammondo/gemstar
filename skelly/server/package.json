@@ -11,7 +11,8 @@
     "playwright:install": "playwright install chromium --with-deps",
     "start": "node --enable-source-maps --env-file-if-exists=.env dist/index.js",
     "setup": "tsx src/scripts/setup.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "dump:openapi": "tsx src/scripts/dump-openapi.ts"
   },
   "license": "ISC",
   "dependencies": {

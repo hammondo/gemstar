@@ -91,7 +91,7 @@ export default function CampaignDetailPage() {
     return (
         <>
             <PageHeader
-                title={campaign.title}
+                title={campaign.name}
                 subtitle={
                     filter === 'all'
                         ? `${campaign.posts.length} post${campaign.posts.length !== 1 ? 's' : ''}`

@@ -87,7 +87,7 @@ export default function CampaignsPage() {
                         <tbody className="divide-y divide-warm-200">
                             {campaigns.map((c) => (
                                 <tr key={c.id} className="group hover:bg-warm-100 transition-colors">
-                                    <td className="px-5 py-3.5 font-medium text-charcoal">{c.title}</td>
+                                    <td className="px-5 py-3.5 font-medium text-charcoal">{c.name}</td>
                                     <td className="px-5 py-3.5 text-muted">{c.posts.length}</td>
                                     <td className="px-5 py-3.5">
                                         <Badge value={c.status} />
