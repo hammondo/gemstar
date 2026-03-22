@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
     type SocialPost,
     approvePost,
@@ -75,7 +75,7 @@ export default function PostDetailPage() {
         try {
             // Save any edits first, then approve passing the current copy
             await approvePost(id, copy.trim());
-            navigate(post?.campaignId ? `/campaigns/${post.campaignId}` : '/posts');
+            navigate(-1);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to approve');
             setActing(null);
@@ -142,7 +142,7 @@ export default function PostDetailPage() {
         setActing('rejecting');
         try {
             await rejectPost(id);
-            navigate(post?.campaignId ? `/campaigns/${post.campaignId}` : '/posts');
+            navigate(-1);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to reject');
             setActing(null);
@@ -210,12 +210,12 @@ export default function PostDetailPage() {
             )}
 
             <div className="mb-4 flex items-center gap-3">
-                <Link
-                    to={post.campaignId ? `/campaigns/${post.campaignId}` : '/posts'}
+                <button
+                    onClick={() => navigate(-1)}
                     className="text-xs font-semibold text-teal-700 hover:text-teal-400"
                 >
                     ← Back
-                </Link>
+                </button>
                 <Badge value={post.status} />
                 <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
                     {post.platform}
