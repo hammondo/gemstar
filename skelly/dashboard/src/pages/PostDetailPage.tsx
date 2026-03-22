@@ -89,12 +89,12 @@ export default function PostDetailPage() {
         try {
             let result;
             if (imageRefFile) {
-                result = await regeneratePostImageWithFile(post.id, post.campaignId, {
+                result = await regeneratePostImageWithFile(post.id, post.campaignId ?? '', {
                     feedback: imageFeedback || undefined,
                     file: imageRefFile,
                 });
             } else {
-                result = await regeneratePostImage(post.id, post.campaignId, {
+                result = await regeneratePostImage(post.id, post.campaignId ?? '', {
                     feedback: imageFeedback || undefined,
                     referenceImageUrl: imageRefUrl || undefined,
                 });

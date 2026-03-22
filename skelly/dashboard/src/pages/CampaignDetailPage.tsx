@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { type Campaign, type PostStatus, approveCampaign, getCampaign, rejectCampaign } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
-import PostPreview from '../components/PostPreview';
+import PostGrid from '../components/PostGrid';
 
 export default function CampaignDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -212,36 +212,26 @@ export default function CampaignDetailPage() {
             )}
 
             {/* Posts */}
-            <div className="flex flex-wrap gap-6">
-                {visiblePosts.map((post) => (
-                    <Link
-                        key={post.id}
-                        to={`/posts/${post.id}`}
-                        className="group relative block shrink-0 transition"
-                    >
-                        <div className="transition group-hover:opacity-90 group-hover:ring-2 group-hover:ring-teal-400 group-hover:ring-offset-2 rounded-2xl">
-                            <PostPreview post={post} />
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                            <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
-                                {post.platform}
+            <PostGrid
+                posts={visiblePosts}
+                emptyMessage="No posts with this status."
+                renderFooter={(post) => (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
+                            {post.platform}
+                        </span>
+                        <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                            {post.postType}
+                        </span>
+                        <Badge value={post.status} />
+                        {post.scheduledFor && (
+                            <span className="text-xs text-muted">
+                                {new Date(post.scheduledFor).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
                             </span>
-                            <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                                {post.postType}
-                            </span>
-                            <Badge value={post.status} />
-                            {post.scheduledFor && (
-                                <span className="text-xs text-muted">
-                                    {new Date(post.scheduledFor).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
-                                </span>
-                            )}
-                        </div>
-                    </Link>
-                ))}
-                {visiblePosts.length === 0 && (
-                    <p className="py-8 text-sm text-muted">No posts with this status.</p>
+                        )}
+                    </div>
                 )}
-            </div>
+            />
         </>
     );
 }

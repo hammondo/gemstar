@@ -17,6 +17,8 @@ import {
     getLatestSignals,
     getLatestTrendsBrief,
     getLibraryPosts,
+    markLibraryPostUsed,
+    reviveLibraryPost,
     scheduleLibraryPost,
     updateTrendsBrief,
     getPostById,
@@ -715,6 +717,28 @@ bodyspaceRouter.post('/run/library', async (req, res) => {
         });
 
         res.json({ ok: true, posts });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.post('/library/posts/:id/used', (req, res) => {
+    try {
+        markLibraryPostUsed(req.params.id);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.post('/library/posts/:id/revive', (req, res) => {
+    try {
+        const post = reviveLibraryPost(req.params.id);
+        if (!post) {
+            res.status(404).json({ ok: false, error: 'Post not found or not a library post' });
+            return;
+        }
+        res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

@@ -1,6 +1,7 @@
 import {
     Activity,
     BarChart3,
+    BookOpen,
     Bot,
     FileText,
     LayoutDashboard,
@@ -29,6 +30,7 @@ const navItems: NavItem[] = [
     { to: '/agents',    icon: Bot,             label: 'Agents' },
     { to: '/campaigns', icon: Megaphone,       label: 'Campaigns' },
     { to: '/posts',     icon: FileText,        label: 'Posts' },
+    { to: '/library',   icon: BookOpen,        label: 'Library' },
     { to: '/signals',   icon: Activity,        label: 'Signals' },
     { to: '/analytics', icon: BarChart3,       label: 'Analytics' },
     { to: '/settings',  icon: Settings,        label: 'Settings' },

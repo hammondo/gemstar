@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS social_posts (
   call_to_action TEXT,
   scheduled_for TEXT,
   status TEXT NOT NULL DEFAULT 'draft'
-    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published')),
+    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published','used')),
   postiz_post_id TEXT,
   rejection_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -96,8 +96,6 @@ CREATE TABLE IF NOT EXISTS approval_notifications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_posts_campaign ON social_posts(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
-CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
 CREATE INDEX IF NOT EXISTS idx_availability_service ON service_availability(service_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 `;
@@ -172,7 +170,7 @@ function runMigrations(db: Database.Database): void {
                 call_to_action TEXT,
                 scheduled_for TEXT,
                 status TEXT NOT NULL DEFAULT 'draft'
-                    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published')),
+                    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published','used')),
                 postiz_post_id TEXT,
                 rejection_reason TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -189,6 +187,58 @@ function runMigrations(db: Database.Database): void {
                  sanity_slug, sanity_sync_status, sanity_synced_at, sanity_sync_error,
                  hashtags, call_to_action, scheduled_for, status, postiz_post_id,
                  rejection_reason, created_at, published_at
+            FROM social_posts;
+            DROP TABLE social_posts;
+            ALTER TABLE social_posts_new RENAME TO social_posts;
+            CREATE INDEX IF NOT EXISTS idx_posts_campaign ON social_posts(campaign_id);
+            CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
+            CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
+            COMMIT;
+        `);
+    }
+
+    // Add 'used' status — requires table reconstruction if existing CHECK constraint doesn't include it.
+    const schema = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='social_posts'").get() as { sql: string } | undefined)?.sql ?? '';
+    if (!schema.includes("'used'")) {
+        db.exec(`
+            BEGIN TRANSACTION;
+            CREATE TABLE social_posts_new (
+                id TEXT PRIMARY KEY,
+                campaign_id TEXT REFERENCES campaigns(id) ON DELETE CASCADE,
+                source TEXT NOT NULL DEFAULT 'campaign' CHECK(source IN ('campaign','library')),
+                service_id TEXT,
+                variant_tag TEXT CHECK(variant_tag IN ('promotional','educational','seasonal','community')),
+                platform TEXT NOT NULL CHECK(platform IN ('instagram','facebook')),
+                post_type TEXT NOT NULL DEFAULT 'feed' CHECK(post_type IN ('feed','story','reel')),
+                content_pillar TEXT,
+                copy TEXT NOT NULL,
+                owner_edit TEXT,
+                image_direction TEXT,
+                image_url TEXT,
+                image_status TEXT NOT NULL DEFAULT 'needed'
+                    CHECK(image_status IN ('needed','generating','draft','approved')),
+                sanity_document_id TEXT,
+                sanity_slug TEXT,
+                sanity_sync_status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(sanity_sync_status IN ('pending','synced','skipped','failed')),
+                sanity_synced_at TEXT,
+                sanity_sync_error TEXT,
+                hashtags TEXT,
+                call_to_action TEXT,
+                scheduled_for TEXT,
+                status TEXT NOT NULL DEFAULT 'draft'
+                    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published','used')),
+                postiz_post_id TEXT,
+                rejection_reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                published_at TEXT
+            );
+            INSERT INTO social_posts_new SELECT
+                id, campaign_id, source, service_id, variant_tag, platform, post_type, content_pillar,
+                copy, owner_edit, image_direction, image_url, image_status, sanity_document_id,
+                sanity_slug, sanity_sync_status, sanity_synced_at, sanity_sync_error,
+                hashtags, call_to_action, scheduled_for, status, postiz_post_id,
+                rejection_reason, created_at, published_at
             FROM social_posts;
             DROP TABLE social_posts;
             ALTER TABLE social_posts_new RENAME TO social_posts;
@@ -614,6 +664,38 @@ export function scheduleLibraryPost(postId: string, scheduledFor: string): void 
         scheduledFor,
         postId,
     );
+}
+
+export function markLibraryPostUsed(postId: string): void {
+    const db = getDb();
+    db.prepare(`UPDATE social_posts SET status = 'used', published_at = ? WHERE id = ? AND source = 'library'`).run(
+        new Date().toISOString(),
+        postId,
+    );
+}
+
+export function reviveLibraryPost(postId: string): SocialPost | null {
+    const db = getDb();
+    const now = new Date().toISOString();
+    const newId = randomUUID();
+
+    // Clone the original post as a fresh draft, clearing schedule/publish state
+    db.prepare(`
+        INSERT INTO social_posts
+            (id, source, service_id, variant_tag, platform, post_type, content_pillar,
+             copy, image_direction, image_url, image_status, hashtags, call_to_action,
+             status, created_at)
+        SELECT
+            ?, source, service_id, variant_tag, platform, post_type, content_pillar,
+            copy, image_direction, image_url,
+            CASE WHEN image_url IS NOT NULL AND image_url != '' THEN 'draft' ELSE 'needed' END,
+            hashtags, call_to_action,
+            'pending_review', ?
+        FROM social_posts
+        WHERE id = ? AND source = 'library'
+    `).run(newId, now, postId);
+
+    return getPostById(newId);
 }
 
 // ─── Row mappers ──────────────────────────────────────────────────────────

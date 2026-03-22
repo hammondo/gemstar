@@ -20,12 +20,17 @@ export function logout(): Promise<{ ok: boolean }> {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
-export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
+export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'used';
+export type PostSource = 'campaign' | 'library';
+export type VariantTag = 'promotional' | 'educational' | 'seasonal' | 'community';
 export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
 
 export interface SocialPost {
     id: string;
-    campaignId: string;
+    campaignId?: string;
+    source: PostSource;
+    serviceId?: string;
+    variantTag?: VariantTag;
     platform: 'instagram' | 'facebook';
     postType: 'feed' | 'story' | 'reel';
     copy: string;
@@ -333,4 +338,38 @@ export function importFreshaCsv(csvContent: string, filename: string): Promise<{
     form.append('csvContent', csvContent);
     form.append('filename', filename);
     return postForm('/api/bodyspace/fresha/import', form);
+}
+
+// ── Library ───────────────────────────────────────────────────────────────────
+
+export function getLibraryPosts(filters?: {
+    serviceId?: string;
+    status?: PostStatus;
+    variantTag?: VariantTag;
+}): Promise<{ ok: boolean; posts: SocialPost[] }> {
+    const params = new URLSearchParams();
+    if (filters?.serviceId) params.set('serviceId', filters.serviceId);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.variantTag) params.set('variantTag', filters.variantTag);
+    const qs = params.size ? `?${params.toString()}` : '';
+    return fetchJson(`/api/bodyspace/library${qs}`);
+}
+
+export function generateLibraryPosts(
+    serviceIds: string[],
+    postsPerService?: number,
+): Promise<{ ok: boolean; posts: SocialPost[] }> {
+    return postJson('/api/bodyspace/run/library', { serviceIds, postsPerService });
+}
+
+export function scheduleLibraryPost(postId: string, scheduledFor: string): Promise<{ ok: boolean; post: SocialPost }> {
+    return patchJson(`/api/bodyspace/library/posts/${postId}/schedule`, { scheduledFor });
+}
+
+export function markLibraryPostUsed(postId: string): Promise<{ ok: boolean }> {
+    return postJson(`/api/bodyspace/library/posts/${postId}/used`);
+}
+
+export function reviveLibraryPost(postId: string): Promise<{ ok: boolean; post: SocialPost }> {
+    return postJson(`/api/bodyspace/library/posts/${postId}/revive`);
 }

@@ -2,7 +2,7 @@
 
 export type AvailabilitySignal = 'push' | 'hold' | 'pause';
 export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
-export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
+export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'used';
 export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
 export type SanitySyncStatus = 'pending' | 'synced' | 'skipped' | 'failed';
 export type Platform = 'instagram' | 'facebook';
