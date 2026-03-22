@@ -7,7 +7,8 @@ WORKDIR /build
 COPY dashboard/package*.json ./dashboard/
 RUN npm ci --prefix dashboard
 COPY dashboard/ ./dashboard/
-RUN npm run build --prefix dashboard
+ARG VITE_API_BASE_URL
+RUN VITE_API_BASE_URL=$VITE_API_BASE_URL npm run build --prefix dashboard
 
 # Install build tools needed to compile better-sqlite3 from source
 RUN apt-get update && apt-get install -y build-essential python3 --no-install-recommends && rm -rf /var/lib/apt/lists/*
@@ -39,4 +40,4 @@ COPY server/config ./server/config
 ENV NODE_ENV=production
 EXPOSE 3000
 
-CMD ["node", "--enable-source-maps", "server/dist/index.js"]
+CMD ["node", "--enable-source-maps", "/app/skelly/server/dist/index.js"]

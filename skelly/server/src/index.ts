@@ -1,12 +1,17 @@
 import cors from 'cors';
+import Database from 'better-sqlite3';
 import dotenv from 'dotenv';
 import express from 'express';
 import session from 'express-session';
+import SqliteStoreFactory from 'better-sqlite3-session-store';
 import { existsSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { settings } from './bodyspace/config.js';
 import apiRouter from './routes/index.js';
+
+const SqliteStore = SqliteStoreFactory(session);
+const sessionDb = new Database('sessions.db');
 
 dotenv.config();
 
@@ -26,6 +31,7 @@ app.use(
 );
 app.use(
     session({
+        store: new SqliteStore({ client: sessionDb }),
         secret: settings.dashboardSessionSecret,
         resave: false,
         saveUninitialized: false,
