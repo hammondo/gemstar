@@ -23,13 +23,13 @@ RUN npm prune --prefix server --omit=dev
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:v1.58.2-noble AS runtime
 
-WORKDIR /app
+WORKDIR /app/skelly
 
 # Copy pre-built, pre-pruned server node_modules from builder (avoids recompiling native addons)
 COPY --from=builder /build/server/node_modules ./server/node_modules
 
 # Install Playwright's Chromium (system deps already present in base image)
-RUN cd /app/server && npx playwright install chromium
+RUN cd /app/skelly/server && npx playwright install chromium
 
 # Copy build artifacts and static config
 COPY --from=builder /build/server/dist ./server/dist
