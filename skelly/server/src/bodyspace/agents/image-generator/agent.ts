@@ -80,6 +80,44 @@ export class ImageGeneratorAgent {
         this.log.info({ campaignId, success, failed }, 'Image generation complete');
     }
 
+    // ── Library post batch generation ───────────────────────────────────────
+
+    async runForPosts(posts: SocialPost[]): Promise<void> {
+        const pending = posts.filter(
+            (p) => !p.imageUrl || p.imageStatus === 'needed' || p.imageStatus === 'generating'
+        );
+
+        if (pending.length === 0) {
+            this.log.info('No library posts need images');
+            return;
+        }
+
+        this.log.info({ count: pending.length }, 'Starting library image generation');
+
+        let success = 0;
+        let failed = 0;
+
+        for (const post of pending) {
+            // Library posts store images under 'library/{postId}/' rather than a campaignId folder
+            const imageDir = resolve(settings.dataDir, 'images', 'library', post.id);
+            mkdirSync(imageDir, { recursive: true });
+
+            try {
+                updatePostImage(post.id, '', 'generating');
+                const imageUrl = await this.generateForPost(post, `library/${post.id}`, imageDir);
+                updatePostImage(post.id, imageUrl, 'draft');
+                success++;
+                this.log.info({ postId: post.id, serviceId: post.serviceId }, 'Library image generated');
+            } catch (err) {
+                failed++;
+                updatePostImage(post.id, '', 'needed');
+                this.log.error({ postId: post.id, error: String(err) }, 'Library image generation failed');
+            }
+        }
+
+        this.log.info({ success, failed }, 'Library image generation complete');
+    }
+
     // ── Single-post regeneration (called from dashboard) ─────────────────────
 
     async regenerate(

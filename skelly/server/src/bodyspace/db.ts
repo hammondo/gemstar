@@ -55,7 +55,10 @@ CREATE TABLE IF NOT EXISTS campaigns (
 
 CREATE TABLE IF NOT EXISTS social_posts (
   id TEXT PRIMARY KEY,
-  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  campaign_id TEXT REFERENCES campaigns(id) ON DELETE CASCADE,
+  source TEXT NOT NULL DEFAULT 'campaign' CHECK(source IN ('campaign','library')),
+  service_id TEXT,
+  variant_tag TEXT CHECK(variant_tag IN ('promotional','educational','seasonal','community')),
   platform TEXT NOT NULL CHECK(platform IN ('instagram','facebook')),
   post_type TEXT NOT NULL DEFAULT 'feed' CHECK(post_type IN ('feed','story','reel')),
   content_pillar TEXT,
@@ -65,12 +68,12 @@ CREATE TABLE IF NOT EXISTS social_posts (
   image_url TEXT,
   image_status TEXT NOT NULL DEFAULT 'needed'
     CHECK(image_status IN ('needed','generating','draft','approved')),
-    sanity_document_id TEXT,
-    sanity_slug TEXT,
-    sanity_sync_status TEXT NOT NULL DEFAULT 'pending'
-        CHECK(sanity_sync_status IN ('pending','synced','skipped','failed')),
-    sanity_synced_at TEXT,
-    sanity_sync_error TEXT,
+  sanity_document_id TEXT,
+  sanity_slug TEXT,
+  sanity_sync_status TEXT NOT NULL DEFAULT 'pending'
+    CHECK(sanity_sync_status IN ('pending','synced','skipped','failed')),
+  sanity_synced_at TEXT,
+  sanity_sync_error TEXT,
   hashtags TEXT,
   call_to_action TEXT,
   scheduled_for TEXT,
@@ -93,6 +96,8 @@ CREATE TABLE IF NOT EXISTS approval_notifications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_posts_campaign ON social_posts(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
+CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
 CREATE INDEX IF NOT EXISTS idx_availability_service ON service_availability(service_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
 `;
@@ -135,6 +140,65 @@ function runMigrations(db: Database.Database): void {
         }
     }
 
+    // Library post columns — requires table reconstruction to also drop NOT NULL on campaign_id.
+    // Check if already migrated before proceeding.
+    const columns = db.prepare('PRAGMA table_info(social_posts)').all() as Array<{ name: string }>;
+    const hasSource = columns.some((c) => c.name === 'source');
+    if (!hasSource) {
+        db.exec(`
+            BEGIN TRANSACTION;
+            CREATE TABLE social_posts_new (
+                id TEXT PRIMARY KEY,
+                campaign_id TEXT REFERENCES campaigns(id) ON DELETE CASCADE,
+                source TEXT NOT NULL DEFAULT 'campaign' CHECK(source IN ('campaign','library')),
+                service_id TEXT,
+                variant_tag TEXT CHECK(variant_tag IN ('promotional','educational','seasonal','community')),
+                platform TEXT NOT NULL CHECK(platform IN ('instagram','facebook')),
+                post_type TEXT NOT NULL DEFAULT 'feed' CHECK(post_type IN ('feed','story','reel')),
+                content_pillar TEXT,
+                copy TEXT NOT NULL,
+                owner_edit TEXT,
+                image_direction TEXT,
+                image_url TEXT,
+                image_status TEXT NOT NULL DEFAULT 'needed'
+                    CHECK(image_status IN ('needed','generating','draft','approved')),
+                sanity_document_id TEXT,
+                sanity_slug TEXT,
+                sanity_sync_status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(sanity_sync_status IN ('pending','synced','skipped','failed')),
+                sanity_synced_at TEXT,
+                sanity_sync_error TEXT,
+                hashtags TEXT,
+                call_to_action TEXT,
+                scheduled_for TEXT,
+                status TEXT NOT NULL DEFAULT 'draft'
+                    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published')),
+                postiz_post_id TEXT,
+                rejection_reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                published_at TEXT
+            );
+            INSERT INTO social_posts_new
+                (id, campaign_id, source, service_id, variant_tag, platform, post_type, content_pillar,
+                 copy, owner_edit, image_direction, image_url, image_status, sanity_document_id,
+                 sanity_slug, sanity_sync_status, sanity_synced_at, sanity_sync_error,
+                 hashtags, call_to_action, scheduled_for, status, postiz_post_id,
+                 rejection_reason, created_at, published_at)
+            SELECT id, campaign_id, 'campaign', NULL, NULL, platform, post_type, content_pillar,
+                 copy, owner_edit, image_direction, image_url, image_status, sanity_document_id,
+                 sanity_slug, sanity_sync_status, sanity_synced_at, sanity_sync_error,
+                 hashtags, call_to_action, scheduled_for, status, postiz_post_id,
+                 rejection_reason, created_at, published_at
+            FROM social_posts;
+            DROP TABLE social_posts;
+            ALTER TABLE social_posts_new RENAME TO social_posts;
+            CREATE INDEX IF NOT EXISTS idx_posts_campaign ON social_posts(campaign_id);
+            CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
+            CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
+            COMMIT;
+        `);
+    }
+
     // Reset any posts stuck in 'generating' from a previous crashed or interrupted run
     db.exec("UPDATE social_posts SET image_status = 'needed' WHERE image_status = 'generating'");
 }
@@ -145,12 +209,15 @@ import { randomUUID } from 'crypto';
 import type {
     Campaign,
     CampaignStatus,
+    GeneratedLibraryPost,
     ImageStatus,
+    PostSource,
     PostStatus,
     SanitySyncStatus,
     ServiceAvailabilityData,
     SocialPost,
     TrendsBrief,
+    VariantTag,
 } from './types.js';
 
 // Serialize/deserialize JSON columns
@@ -325,9 +392,9 @@ export function saveCampaign(data: Omit<Campaign, 'id' | 'createdAt'>): Campaign
     // Insert posts
     const insertPost = db.prepare(`
     INSERT INTO social_posts
-      (id, campaign_id, platform, post_type, content_pillar, copy,
+      (id, campaign_id, source, platform, post_type, content_pillar, copy,
        image_direction, hashtags, call_to_action, scheduled_for, status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
   `);
 
     const insertPosts = db.transaction((posts: SocialPost[]) => {
@@ -335,6 +402,7 @@ export function saveCampaign(data: Omit<Campaign, 'id' | 'createdAt'>): Campaign
             insertPost.run(
                 post.id,
                 id,
+                'campaign',
                 post.platform,
                 post.postType,
                 post.contentPillar,
@@ -458,6 +526,96 @@ export function updatePostSanitySync(
     ).run(data.status, data.documentId ?? null, data.slug ?? null, data.syncedAt ?? null, data.error ?? null, postId);
 }
 
+// ─── Library Posts ────────────────────────────────────────────────────────
+
+export function saveLibraryPosts(posts: GeneratedLibraryPost[]): SocialPost[] {
+    const db = getDb();
+    const now = new Date().toISOString();
+
+    const insert = db.prepare(`
+        INSERT INTO social_posts
+            (id, source, service_id, variant_tag, platform, post_type, content_pillar,
+             copy, image_direction, hashtags, call_to_action, status, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `);
+
+    const saved: SocialPost[] = [];
+
+    const insertAll = db.transaction((rows: GeneratedLibraryPost[]) => {
+        for (const post of rows) {
+            const id = randomUUID();
+            insert.run(
+                id,
+                'library',
+                post.serviceId,
+                post.variantTag,
+                post.platform,
+                post.postType,
+                post.contentPillar,
+                post.copy,
+                post.imageDirection,
+                j(post.hashtags),
+                post.callToAction,
+                'pending_review',
+                now,
+            );
+            saved.push({
+                id,
+                source: 'library',
+                serviceId: post.serviceId,
+                variantTag: post.variantTag,
+                platform: post.platform,
+                postType: post.postType,
+                contentPillar: post.contentPillar,
+                copy: post.copy,
+                imageDirection: post.imageDirection,
+                hashtags: post.hashtags,
+                callToAction: post.callToAction,
+                status: 'pending_review',
+                imageStatus: 'needed',
+                sanitySyncStatus: 'pending',
+                createdAt: now,
+            });
+        }
+    });
+
+    insertAll(posts);
+    return saved;
+}
+
+export function getLibraryPosts(filters: { serviceId?: string; status?: PostStatus; variantTag?: VariantTag } = {}): SocialPost[] {
+    const db = getDb();
+    const conditions = ["source = 'library'"];
+    const params: unknown[] = [];
+
+    if (filters.serviceId) {
+        conditions.push('service_id = ?');
+        params.push(filters.serviceId);
+    }
+    if (filters.status) {
+        conditions.push('status = ?');
+        params.push(filters.status);
+    }
+    if (filters.variantTag) {
+        conditions.push('variant_tag = ?');
+        params.push(filters.variantTag);
+    }
+
+    const rows = db
+        .prepare(`SELECT * FROM social_posts WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC`)
+        .all(...params) as Array<Record<string, unknown>>;
+
+    return rows.map(rowToPost);
+}
+
+export function scheduleLibraryPost(postId: string, scheduledFor: string): void {
+    const db = getDb();
+    db.prepare(`UPDATE social_posts SET scheduled_for = ? WHERE id = ? AND source = 'library'`).run(
+        scheduledFor,
+        postId,
+    );
+}
+
 // ─── Row mappers ──────────────────────────────────────────────────────────
 
 function rowToCampaign(row: Record<string, unknown>, postRows: Array<Record<string, unknown>>): Campaign {
@@ -481,7 +639,10 @@ function rowToCampaign(row: Record<string, unknown>, postRows: Array<Record<stri
 function rowToPost(row: Record<string, unknown>): SocialPost {
     return {
         id: row.id as string,
-        campaignId: row.campaign_id as string,
+        campaignId: (row.campaign_id as string | null) ?? undefined,
+        source: ((row.source as string | null) ?? 'campaign') as PostSource,
+        serviceId: (row.service_id as string | null) ?? undefined,
+        variantTag: (row.variant_tag as VariantTag | null) ?? undefined,
         platform: row.platform as SocialPost['platform'],
         postType: row.post_type as SocialPost['postType'],
         contentPillar: row.content_pillar as SocialPost['contentPillar'],

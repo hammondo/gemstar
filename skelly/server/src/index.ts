@@ -1,9 +1,9 @@
-import cors from 'cors';
 import Database from 'better-sqlite3';
+import SqliteStoreFactory from 'better-sqlite3-session-store';
+import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
 import session from 'express-session';
-import SqliteStoreFactory from 'better-sqlite3-session-store';
 import { existsSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -11,13 +11,13 @@ import { settings } from './bodyspace/config.js';
 import apiRouter from './routes/index.js';
 
 const SqliteStore = SqliteStoreFactory(session);
-const sessionDb = new Database('sessions.db');
+const sessionDb = new Database(resolve(settings.dataDir, 'sessions.db'));
 
 dotenv.config();
 
 const app = express();
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
-const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:3000,http://localhost:5174')
+const allowedOrigins = (process.env.CORS_ORIGIN ?? 'http://localhost:5174')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);

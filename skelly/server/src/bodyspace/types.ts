@@ -8,6 +8,8 @@ export type SanitySyncStatus = 'pending' | 'synced' | 'skipped' | 'failed';
 export type Platform = 'instagram' | 'facebook';
 export type PostType = 'feed' | 'story' | 'reel';
 export type ContentPillar = 'education' | 'promotion' | 'community' | 'social_proof' | 'seasonal';
+export type PostSource = 'campaign' | 'library';
+export type VariantTag = 'promotional' | 'educational' | 'seasonal' | 'community';
 
 // ─── Fresha Availability ──────────────────────────────────────────────────
 
@@ -44,7 +46,10 @@ export interface TrendsBrief {
 
 export interface SocialPost {
     id: string;
-    campaignId: string;
+    campaignId?: string;  // undefined for library posts
+    source: PostSource;
+    serviceId?: string;   // set on library posts; campaign posts derive this from campaign.targetServices
+    variantTag?: VariantTag;
     platform: Platform;
     postType: PostType;
     contentPillar: ContentPillar;
@@ -107,6 +112,18 @@ export interface GeneratedCampaign {
     targetServices: string[];
     durationWeeks: number;
     posts: GeneratedPost[];
+}
+
+export interface GeneratedLibraryPost {
+    serviceId: string;
+    platform: Platform;
+    postType: PostType;
+    contentPillar: ContentPillar;
+    variantTag: VariantTag;
+    copy: string;
+    imageDirection: string;
+    hashtags: string[];
+    callToAction: string;
 }
 
 export interface GeneratedTrendsBrief {

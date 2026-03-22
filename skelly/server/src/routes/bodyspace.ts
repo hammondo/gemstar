@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { FreshaWatcherAgent } from '../bodyspace/agents/fresha-watcher/agent.js';
 import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.js';
+import { LibraryGeneratorAgent } from '../bodyspace/agents/library-generator/agent.js';
 import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
 import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
@@ -15,6 +16,8 @@ import {
     getCampaignsByStatus,
     getLatestSignals,
     getLatestTrendsBrief,
+    getLibraryPosts,
+    scheduleLibraryPost,
     updateTrendsBrief,
     getPostById,
     updatePostCopy,
@@ -673,6 +676,61 @@ Return ONLY a JSON array of strings. Each string should be a full search instruc
         }
 
         res.json({ ok: true, terms });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// ── Library ───────────────────────────────────────────────────────────────
+
+bodyspaceRouter.get('/library', (req, res) => {
+    try {
+        const { serviceId, status, variantTag } = req.query as Record<string, string | undefined>;
+        const posts = getLibraryPosts({ serviceId, status, variantTag } as Parameters<typeof getLibraryPosts>[0]);
+        res.json({ ok: true, posts });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.post('/run/library', async (req, res) => {
+    try {
+        const { serviceIds, postsPerService } = req.body as {
+            serviceIds?: unknown;
+            postsPerService?: unknown;
+        };
+        if (!Array.isArray(serviceIds) || !serviceIds.every((s) => typeof s === 'string')) {
+            res.status(400).json({ ok: false, error: 'serviceIds must be an array of strings' });
+            return;
+        }
+        const count = typeof postsPerService === 'number' ? postsPerService : 6;
+
+        const agent = new LibraryGeneratorAgent();
+        const posts = await agent.run(serviceIds as string[], count);
+
+        // Fire image generation in background
+        const imageGen = new ImageGeneratorAgent();
+        void imageGen.runForPosts(posts).catch((err) => {
+            console.error('[Library] Image generation failed:', err);
+        });
+
+        res.json({ ok: true, posts });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.patch('/library/posts/:id/schedule', (req, res) => {
+    try {
+        const postId = req.params.id;
+        const { scheduledFor } = req.body as { scheduledFor?: string };
+        if (!scheduledFor || typeof scheduledFor !== 'string') {
+            res.status(400).json({ ok: false, error: 'scheduledFor is required' });
+            return;
+        }
+        scheduleLibraryPost(postId, scheduledFor);
+        const post = getPostById(postId);
+        res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
