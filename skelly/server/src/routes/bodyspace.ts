@@ -767,6 +767,49 @@ bodyspaceRouter.post('/run/library/stream', async (req, res) => {
     }
 });
 
+bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+
+    const send = (event: string, data: unknown) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let closed = false;
+    req.on('close', () => { closed = true; });
+
+    const progress = (p: { type: string; message: string }) => { if (!closed) send('progress', p); };
+
+    try {
+        const allLibraryPosts = getLibraryPosts();
+        const needed = allLibraryPosts.filter((p) => p.imageStatus === 'needed' || p.imageStatus === 'generating');
+
+        if (needed.length === 0) {
+            send('complete', { ok: true });
+            res.end();
+            return;
+        }
+
+        progress({ type: 'status', message: `Found ${needed.length} post${needed.length !== 1 ? 's' : ''} needing images…` });
+
+        const imageGen = new ImageGeneratorAgent();
+        await imageGen.runForPosts(needed, progress);
+
+        if (!closed) {
+            send('complete', { ok: true });
+            res.end();
+        }
+    } catch (err) {
+        if (!closed) {
+            send('error', { message: String(err) });
+            res.end();
+        }
+    }
+});
+
 bodyspaceRouter.post('/library/posts/:id/used', (req, res) => {
     try {
         markLibraryPostUsed(req.params.id);

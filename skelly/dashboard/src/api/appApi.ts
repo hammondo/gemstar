@@ -368,6 +368,10 @@ export function streamGenerateLibraryPosts(
     return streamSSEPost('/api/bodyspace/run/library/stream', { serviceIds, postsPerService }, callbacks);
 }
 
+export function streamGenerateLibraryImages(callbacks: SSECallbacks<LibraryProgress>): () => void {
+    return streamSSEPost('/api/bodyspace/run/library/images/stream', {}, callbacks);
+}
+
 export function scheduleLibraryPost(postId: string, scheduledFor: string): Promise<{ ok: boolean; post: SocialPost }> {
     return patchJson(`/api/bodyspace/library/posts/${postId}/schedule`, { scheduledFor });
 }

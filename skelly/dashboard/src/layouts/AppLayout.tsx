@@ -1,14 +1,4 @@
-import {
-    Activity,
-    BarChart3,
-    BookOpen,
-    Bot,
-    FileText,
-    LayoutDashboard,
-    LogOut,
-    Megaphone,
-    Settings,
-} from 'lucide-react';
+import { Activity, BarChart3, BookOpen, FileText, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import type { AuthUser } from '../api/appApi';
 import logo from '../assets/logo.png';
@@ -26,28 +16,24 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-    { to: '/',          icon: LayoutDashboard, label: 'Dashboard',  end: true },
-    { to: '/agents',    icon: Bot,             label: 'Agents' },
-    { to: '/campaigns', icon: Megaphone,       label: 'Campaigns' },
-    { to: '/posts',     icon: FileText,        label: 'Posts' },
-    { to: '/library',   icon: BookOpen,        label: 'Library' },
-    { to: '/signals',   icon: Activity,        label: 'Signals' },
-    { to: '/analytics', icon: BarChart3,       label: 'Analytics' },
-    { to: '/settings',  icon: Settings,        label: 'Settings' },
+    { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+    // { to: '/agents',    icon: Bot,             label: 'Agents' },
+    { to: '/campaigns', icon: Megaphone, label: 'Campaigns' },
+    { to: '/posts', icon: FileText, label: 'Posts' },
+    { to: '/library', icon: BookOpen, label: 'Library' },
+    { to: '/signals', icon: Activity, label: 'Signals' },
+    { to: '/analytics', icon: BarChart3, label: 'Analytics' },
+    { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function AppLayout({ user, onLogout }: AppLayoutProps) {
     return (
         <div className="flex h-screen overflow-hidden">
             {/* ── Sidebar ── */}
-            <aside className="flex w-60 shrink-0 flex-col bg-charcoal">
+            <aside className="bg-charcoal flex w-60 shrink-0 flex-col">
                 {/* Brand */}
                 <div className="flex h-16 items-center gap-2.5 border-b border-white/10 px-5">
-                    <img
-                        src={logo}
-                        alt="BodySpace"
-                        className="h-8 w-8 rounded-lg object-cover"
-                    />
+                    <img src={logo} alt="BodySpace" className="h-8 w-8 rounded-lg object-cover" />
                     <div className="leading-tight">
                         <p className="text-sm font-bold text-white">BodySpace</p>
                         <p className="text-[10px] font-medium tracking-wider text-teal-400 uppercase">GemStar</p>
@@ -72,11 +58,7 @@ export default function AppLayout({ user, onLogout }: AppLayoutProps) {
                                 >
                                     {({ isActive }) => (
                                         <>
-                                            <Icon
-                                                size={17}
-                                                strokeWidth={isActive ? 2.2 : 1.8}
-                                                className="shrink-0"
-                                            />
+                                            <Icon size={17} strokeWidth={isActive ? 2.2 : 1.8} className="shrink-0" />
                                             {label}
                                         </>
                                     )}
@@ -110,7 +92,7 @@ export default function AppLayout({ user, onLogout }: AppLayoutProps) {
             {/* ── Main ── */}
             <div className="flex flex-1 flex-col overflow-hidden">
                 {/* Top bar */}
-                <header className="flex h-16 shrink-0 items-center border-b border-warm-200 bg-white px-7">
+                <header className="border-warm-200 flex h-16 shrink-0 items-center border-b bg-white px-7">
                     <div id="page-header-portal" className="flex-1" />
                 </header>
 

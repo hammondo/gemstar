@@ -1,4 +1,4 @@
-import { BookOpen, LayoutGrid, List, RefreshCw, Sparkles } from 'lucide-react';
+import { BookOpen, ImagePlus, LayoutGrid, List, RefreshCw, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -9,6 +9,7 @@ import {
     type PostStatus,
     type VariantTag,
     streamGenerateLibraryPosts,
+    streamGenerateLibraryImages,
     getLibraryPosts,
     getServices,
     getSignals,
@@ -103,6 +104,11 @@ export default function LibraryPage() {
     const [generateLog, setGenerateLog] = useState<string[]>([]);
     const [generateError, setGenerateError] = useState<string | null>(null);
     const stopGenerateRef = useRef<(() => void) | null>(null);
+
+    // Fill missing images
+    const [imageState, setImageState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+    const [imageLog, setImageLog] = useState<string[]>([]);
+    const stopImageRef = useRef<(() => void) | null>(null);
 
     // Per-post acting state
     const [acting, setActing] = useState<Record<string, string>>({});
@@ -228,6 +234,27 @@ export default function LibraryPage() {
         setSelectedServices(new Set());
     }
 
+    function handleFillImages() {
+        setImageState('running');
+        setImageLog([]);
+        const stop = streamGenerateLibraryImages({
+            onProgress(data: LibraryProgress) {
+                setImageLog((prev) => [...prev, data.message]);
+            },
+            onComplete() {
+                setImageState('done');
+                stopImageRef.current = null;
+                void loadPosts();
+            },
+            onError(err: string) {
+                setImageState('error');
+                stopImageRef.current = null;
+                setImageLog((prev) => [...prev, `Error: ${err}`]);
+            },
+        });
+        stopImageRef.current = stop;
+    }
+
     function toggleService(id: string) {
         setSelectedServices((prev) => {
             const next = new Set(prev);
@@ -313,6 +340,17 @@ export default function LibraryPage() {
                         <RefreshCw size={14} />
                         Refresh
                     </button>
+                    {posts.some((p) => p.imageStatus === 'needed') && (
+                        <button
+                            onClick={handleFillImages}
+                            disabled={imageState === 'running'}
+                            title="Generate missing images"
+                            className="flex items-center gap-1.5 rounded-lg border border-warm-200 bg-white px-3 py-2 text-sm text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
+                        >
+                            <ImagePlus size={14} />
+                            Fill images
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowGenerate(true)}
                         className="flex items-center gap-1.5 rounded-lg bg-teal-400 px-4 py-2 text-sm font-semibold text-charcoal transition hover:brightness-110"
@@ -322,6 +360,24 @@ export default function LibraryPage() {
                     </button>
                 </div>
             </div>
+
+            {/* ── Fill images progress ── */}
+            {(imageState === 'running' || imageState === 'done' || imageState === 'error') && imageLog.length > 0 && (
+                <div className="mb-5 rounded-2xl border border-warm-200 bg-white p-4 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between">
+                        <p className="text-xs font-semibold text-charcoal">Generating missing images</p>
+                        {imageState !== 'running' && (
+                            <button
+                                onClick={() => { stopImageRef.current?.(); setImageState('idle'); setImageLog([]); }}
+                                className="text-xs text-muted hover:text-charcoal"
+                            >
+                                Dismiss
+                            </button>
+                        )}
+                    </div>
+                    <GenerateProgressLog entries={imageLog} state={imageState} />
+                </div>
+            )}
 
             {/* ── Generate panel ── */}
             {showGenerate && (
