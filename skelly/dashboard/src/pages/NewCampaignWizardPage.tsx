@@ -2,7 +2,7 @@ import { Check, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    type AvailabilitySignal,
+    type ServiceAvailability,
     type Campaign,
     type MonitorProgress,
     type ServiceInfo,
@@ -547,7 +547,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
     const [services, setServices] = useState<ServiceInfo[]>([]);
     const [servicesLoading, setServicesLoading] = useState(true);
     const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
-    const [signals, setSignals] = useState<Record<string, AvailabilitySignal>>({});
+    const [signals, setSignals] = useState<Record<string, ServiceAvailability>>({});
     const [refreshing, setRefreshing] = useState(false);
     const [state, setState] = useState<RunState>('idle');
     const [error, setError] = useState<string | null>(null);

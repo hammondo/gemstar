@@ -2,7 +2,7 @@ import { BookOpen, ImagePlus, LayoutGrid, List, RefreshCw, Sparkles } from 'luci
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    type AvailabilitySignal,
+    type ServiceAvailability,
     type LibraryProgress,
     type ServiceInfo,
     type SocialPost,
@@ -94,7 +94,7 @@ export default function LibraryPage() {
     const [scheduledFor, setScheduledFor] = useState('');
     const [scheduling, setScheduling] = useState(false);
 
-    const [signals, setSignals] = useState<Record<string, AvailabilitySignal>>({});
+    const [signals, setSignals] = useState<Record<string, ServiceAvailability>>({});
 
     // Generate panel
     const [showGenerate, setShowGenerate] = useState(false);

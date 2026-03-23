@@ -3,12 +3,12 @@ import { useEffect, useState } from 'react';
 function stripCiteTags(text: string): string {
     return text.replace(/<\/?cite[^>]*>/gi, '');
 }
-import { type AvailabilitySignal, type TrendsBrief, getLatestTrends, getSignals } from '../api/appApi';
+import { type ServiceAvailability, type TrendsBrief, getLatestTrends, getSignals } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
 
 export default function SignalsPage() {
-    const [signals, setSignals] = useState<Record<string, AvailabilitySignal>>({});
+    const [signals, setSignals] = useState<Record<string, ServiceAvailability>>({});
     const [trends, setTrends] = useState<TrendsBrief | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);

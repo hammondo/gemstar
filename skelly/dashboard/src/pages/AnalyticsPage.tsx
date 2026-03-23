@@ -14,7 +14,7 @@ import {
     YAxis,
 } from 'recharts';
 import {
-    type AvailabilitySignal,
+    type ServiceAvailability,
     type Campaign,
     type FbInsightRow,
     type MetaAnalyticsResult,
@@ -204,7 +204,7 @@ function FbInsightsCharts({ series, metrics }: { series: FbInsightRow[]; metrics
 
 export default function AnalyticsPage() {
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-    const [signals, setSignals] = useState<Record<string, AvailabilitySignal>>({});
+    const [signals, setSignals] = useState<Record<string, ServiceAvailability>>({});
     const [meta, setMeta] = useState<MetaAnalyticsResult | null>(null);
     const [metaRefreshing, setMetaRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);

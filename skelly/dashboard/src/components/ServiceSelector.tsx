@@ -1,9 +1,9 @@
-import type { AvailabilitySignal, ServiceInfo } from '../api/appApi';
+import type { ServiceAvailability, ServiceInfo } from '../api/appApi';
 
 interface ServiceSelectorProps {
     services: ServiceInfo[];
     selected: Set<string>;
-    signals?: Record<string, AvailabilitySignal>;
+    signals?: Record<string, ServiceAvailability>;
     loading?: boolean;
     disabled?: boolean;
     label?: string;
