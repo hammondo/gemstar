@@ -12,11 +12,16 @@
     "playwright:install": "playwright install chromium --with-deps",
     "start": "node --enable-source-maps --env-file-if-exists=.env dist/index.js",
     "setup": "tsx src/scripts/setup.ts",
-    "lint": "tsc --noEmit"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "dump:openapi": "tsx src/scripts/dump-openapi.ts",
+    "regen:client": "npm run dump:openapi && npm run gen:api --prefix ../dashboard"
   },
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@azure/msal-node": "^3.8.10",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "better-sqlite3": "^11.10.0",
@@ -33,6 +38,7 @@
     "pino-pretty": "^11.0.0",
     "playwright": "^1.44.0",
     "resend": "^3.0.0",
+    "swagger-ui-express": "^5.0.1",
     "zod": "^3.22.0"
   },
   "devDependencies": {
@@ -44,7 +50,11 @@
     "@types/multer": "^2.1.0",
     "@types/node": "^25.5.0",
     "@types/node-cron": "^3.0.0",
+    "@types/supertest": "^7.2.0",
+    "@types/swagger-ui-express": "^4.1.8",
+    "supertest": "^7.2.2",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
   }
 }

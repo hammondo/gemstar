@@ -1,23 +1,32 @@
-import { fetchJson, patchJson, postForm, postJson, putJson, streamSSE, streamSSEPost, type SSECallbacks } from './http';
+import { postForm, streamSSE, streamSSEPost, type SSECallbacks } from './http';
+import { client } from './client';
+import type { components } from './schema.d.ts';
 export type { SSECallbacks };
 
+// ── Generated types ────────────────────────────────────────────────────────
+
+export type Campaign = components['schemas']['Campaign'];
+export type SocialPost = components['schemas']['SocialPost'];
+export type TrendsBrief = components['schemas']['TrendsBrief'];
+export type ServiceAvailability = components['schemas']['ServiceAvailability'];
+export type AuthUser = components['schemas']['AuthUser'];
+export type ServiceInfo = components['schemas']['ServiceInfo'];
+export type BlogSync = components['schemas']['BlogSync'];
+export type CampaignStatus = components['schemas']['CampaignStatus'];
+export type PostStatus = components['schemas']['PostStatus'];
+export type ImageStatus = components['schemas']['ImageStatus'];
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function unwrap<T>(result: { data?: T; error?: unknown }): T {
+    if (result.error !== undefined) {
+        const err = result.error as { error?: string } | undefined;
+        throw new Error(err?.error ?? 'Request failed');
+    }
+    return result.data!;
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
-
-export interface AuthUser {
-    id: string;
-    name: string;
-    email: string;
-}
-
-export function getMe(): Promise<{ ok: boolean; user: AuthUser }> {
-    return fetchJson('/api/auth/me');
-}
-
-export function logout(): Promise<{ ok: boolean }> {
-    return postJson('/api/auth/logout');
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
 export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'used';
@@ -48,161 +57,116 @@ export interface SocialPost {
     createdAt: string;
 }
 
-export interface Campaign {
-    id: string;
-    title: string;
-    description?: string;
-    theme?: string;
-    targetServices?: string[];
-    ownerNotes?: string;
-    status: CampaignStatus;
-    posts: SocialPost[];
-    createdAt: string;
+export async function logout() {
+    return unwrap(await client.POST('/api/auth/logout'));
 }
 
-export interface AvailabilitySignal {
-    serviceId: string;
-    serviceName: string;
-    availableSlots: number;
-    signal: 'push' | 'hold' | 'pause';
-    pushThreshold: number;
-    pauseThreshold: number;
-    recordedAt: string;
+// ── Status ────────────────────────────────────────────────────────────────────
+
+export type BodyspaceStatus = NonNullable<
+    Awaited<ReturnType<typeof getBodyspaceStatus>>
+>;
+
+export async function getBodyspaceStatus() {
+    return unwrap(await client.GET('/api/bodyspace/status'));
 }
 
-export interface BodyspaceStatus {
-    counts: {
-        totalCampaigns: number;
-        approvedCampaigns: number;
-        pendingReviewCampaigns: number;
-        publishedPosts: number;
-        pendingReviewPosts: number;
-    };
-    timezone?: string;
-    schedules?: {
-        freshaWatcher: string;
-        monitor: string;
-        campaignPlanner: string;
-    };
+// ── Campaigns ─────────────────────────────────────────────────────────────────
+
+export async function getCampaigns(status?: CampaignStatus) {
+    return unwrap(await client.GET('/api/bodyspace/campaigns', { params: { query: { status } } }));
 }
 
-export interface TrendsBrief {
-    id: string;
-    weekOf: string;
-    competitorSummary: string;
-    trendSignals: string;
-    seasonalFactors: string;
-    recommendedFocus: string;
-    opportunities: string;
-    sources: string[];
-    confidence: 'high' | 'medium' | 'low';
-    createdAt: string;
+export async function getCampaign(id: string) {
+    return unwrap(await client.GET('/api/bodyspace/campaigns/{id}', { params: { path: { id } } }));
 }
 
-// ── API calls ─────────────────────────────────────────────────────────────────
-
-// ── Meta analytics ────────────────────────────────────────────────────────────
-
-export interface IgAccountData {
-    username: string;
-    followersCount: number;
-    mediaCount: number;
+export async function approveCampaign(id: string, notes?: string) {
+    return unwrap(await client.POST('/api/bodyspace/campaigns/{id}/approve', {
+        params: { path: { id } },
+        body: { notes },
+    }));
 }
 
-export interface IgPostData {
-    id: string;
-    caption: string;
-    mediaType: 'IMAGE' | 'VIDEO' | 'CAROUSEL_ALBUM' | 'REEL';
-    timestamp: string;
-    permalink: string;
-    likeCount: number;
-    commentsCount: number;
-    views: number;
-    reach: number;
-    saved: number;
-    shares: number;
-    totalInteractions: number;
+export async function rejectCampaign(id: string, reason?: string) {
+    return unwrap(await client.POST('/api/bodyspace/campaigns/{id}/reject', {
+        params: { path: { id } },
+        body: { reason },
+    }));
 }
 
-export interface FbInsightRow {
-    date: string;
-    [metric: string]: number | string;
+// ── Posts ─────────────────────────────────────────────────────────────────────
+
+export async function getPost(id: string) {
+    return unwrap(await client.GET('/api/bodyspace/posts/{id}', { params: { path: { id } } }));
 }
 
-export interface FbPageData {
-    name: string;
-    fanCount: number;
-    series: FbInsightRow[];
-    metrics: string[];
+export async function updatePost(id: string, copy: string, scheduledFor?: string | null) {
+    return unwrap(await client.PATCH('/api/bodyspace/posts/{id}', {
+        params: { path: { id } },
+        body: { copy, scheduledFor },
+    }));
 }
 
-export interface FbPostData {
-    id: string;
-    message: string;
-    createdTime: string;
+export async function approvePost(id: string, copy?: string) {
+    return unwrap(await client.POST('/api/bodyspace/posts/{id}/approve', {
+        params: { path: { id } },
+        body: { copy },
+    }));
 }
 
-export type MetaAnalyticsResult =
-    | { configured: false }
-    | {
-          configured: true;
-          fetchedAt: string;
-          instagram?: { account: IgAccountData; recentPosts: IgPostData[] };
-          facebook?: { page: FbPageData; recentPosts: FbPostData[] };
-      };
-
-export function getMetaAnalytics(): Promise<MetaAnalyticsResult> {
-    return fetchJson('/api/bodyspace/analytics/meta');
+export async function rejectPost(id: string, reason?: string) {
+    return unwrap(await client.POST('/api/bodyspace/posts/{id}/reject', {
+        params: { path: { id } },
+        body: { reason },
+    }));
 }
 
-export function refreshMetaCache(): Promise<{ ok: boolean }> {
-    return postJson('/api/bodyspace/analytics/meta/refresh');
+// ── Image management ──────────────────────────────────────────────────────────
+
+export async function approvePostImage(postId: string) {
+    return unwrap(await client.POST('/api/bodyspace/posts/{id}/image/approve', {
+        params: { path: { id: postId } },
+    }));
 }
 
-export function getHealth(): Promise<{ status: string; service: string; timestamp: string }> {
-    return fetchJson('/api/health');
+export async function uploadPostImage(postId: string, file: File) {
+    const form = new FormData();
+    form.append('imageFile', file);
+    return postForm<{ ok: boolean; post: SocialPost }>(`/api/bodyspace/posts/${postId}/image/upload`, form);
 }
 
-export function getBodyspaceStatus(): Promise<BodyspaceStatus> {
-    return fetchJson('/api/bodyspace/status');
+export async function regeneratePostImage(
+    postId: string,
+    campaignId: string,
+    opts: { feedback?: string; referenceImageUrl?: string } = {},
+) {
+    const form = new FormData();
+    form.append('campaignId', campaignId);
+    if (opts.feedback) form.append('feedback', opts.feedback);
+    if (opts.referenceImageUrl) form.append('referenceImageUrl', opts.referenceImageUrl);
+    return postForm<{ ok: boolean; post: SocialPost }>(`/api/bodyspace/posts/${postId}/image/regenerate`, form);
 }
 
-export function getCampaigns(status?: CampaignStatus): Promise<{ campaigns: Campaign[] }> {
-    const qs = status ? `?status=${status}` : '';
-    return fetchJson(`/api/bodyspace/campaigns${qs}`);
+export async function regeneratePostImageWithFile(
+    postId: string,
+    campaignId: string,
+    opts: { feedback?: string; file?: File } = {},
+) {
+    const form = new FormData();
+    form.append('campaignId', campaignId);
+    if (opts.feedback) form.append('feedback', opts.feedback);
+    if (opts.file) form.append('referenceImageFile', opts.file);
+    return postForm<{ ok: boolean; post: SocialPost }>(`/api/bodyspace/posts/${postId}/image/regenerate`, form);
 }
 
-export function getCampaign(id: string): Promise<{ campaign: Campaign }> {
-    return fetchJson(`/api/bodyspace/campaigns/${id}`);
+// ── Trends ────────────────────────────────────────────────────────────────────
+
+export async function getLatestTrends() {
+    return unwrap(await client.GET('/api/bodyspace/trends/latest'));
 }
 
-export function getPost(id: string): Promise<{ post: SocialPost }> {
-    return fetchJson(`/api/bodyspace/posts/${id}`);
-}
-
-export function updatePost(id: string, copy: string, scheduledFor?: string | null): Promise<{ post: SocialPost }> {
-    return patchJson(`/api/bodyspace/posts/${id}`, { copy, scheduledFor });
-}
-
-export function getSignals(): Promise<{ signals: Record<string, AvailabilitySignal> }> {
-    return fetchJson('/api/bodyspace/signals');
-}
-
-export interface ServiceInfo {
-    id: string;
-    name: string;
-    category: string;
-}
-
-export function getServices(): Promise<{ ok: boolean; services: ServiceInfo[] }> {
-    return fetchJson('/api/bodyspace/services');
-}
-
-export function getLatestTrends(): Promise<{ brief: TrendsBrief | null }> {
-    return fetchJson('/api/bodyspace/trends/latest');
-}
-
-export function updateTrendsBrief(
+export async function updateTrendsBrief(
     id: string,
     patch: {
         competitorSummary: string;
@@ -211,133 +175,114 @@ export function updateTrendsBrief(
         recommendedFocus: string;
         opportunities: string;
     },
-): Promise<{ ok: boolean; brief: TrendsBrief }> {
-    return patchJson(`/api/bodyspace/trends/${id}`, patch);
+) {
+    return unwrap(await client.PATCH('/api/bodyspace/trends/{id}', {
+        params: { path: { id } },
+        body: patch,
+    }));
 }
 
-export function approveCampaign(id: string, notes?: string): Promise<{ ok: boolean }> {
-    return postJson(`/api/bodyspace/campaigns/${id}/approve`, { notes });
+// ── Signals ───────────────────────────────────────────────────────────────────
+
+export async function getSignals() {
+    return unwrap(await client.GET('/api/bodyspace/signals'));
 }
 
-export function rejectCampaign(id: string, reason?: string): Promise<{ ok: boolean }> {
-    return postJson(`/api/bodyspace/campaigns/${id}/reject`, { reason });
+// ── Services ──────────────────────────────────────────────────────────────────
+
+export async function getServices() {
+    return unwrap(await client.GET('/api/bodyspace/services'));
 }
 
-export function approvePost(id: string, copy?: string): Promise<{ ok: boolean }> {
-    return postJson(`/api/bodyspace/posts/${id}/approve`, { copy });
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export type MetaAnalyticsResult = NonNullable<
+    Awaited<ReturnType<typeof getMetaAnalytics>>
+>;
+
+export async function getMetaAnalytics() {
+    return unwrap(await client.GET('/api/bodyspace/analytics/meta'));
 }
 
-export function rejectPost(id: string, reason?: string): Promise<{ ok: boolean }> {
-    return postJson(`/api/bodyspace/posts/${id}/reject`, { reason });
+export async function refreshMetaCache() {
+    return unwrap(await client.POST('/api/bodyspace/analytics/meta/refresh'));
 }
 
-// ── Image management ──────────────────────────────────────────────────────────
+// ── Health ────────────────────────────────────────────────────────────────────
 
-export function approvePostImage(postId: string): Promise<{ ok: boolean; post: SocialPost }> {
-    return postJson(`/api/bodyspace/posts/${postId}/image/approve`);
+export async function getHealth() {
+    return unwrap(await client.GET('/api/health'));
 }
 
-export function regeneratePostImage(
-    postId: string,
-    campaignId: string,
-    opts: { feedback?: string; referenceImageUrl?: string } = {},
-): Promise<{ ok: boolean; post: SocialPost }> {
-    return postJson(`/api/bodyspace/posts/${postId}/image/regenerate`, { campaignId, ...opts });
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export async function getMonitorSearchTerms() {
+    return unwrap(await client.GET('/api/bodyspace/settings/monitor-terms'));
 }
 
-export function uploadPostImage(postId: string, file: File): Promise<{ ok: boolean; post: SocialPost }> {
-    const form = new FormData();
-    form.append('imageFile', file);
-    return postForm(`/api/bodyspace/posts/${postId}/image/upload`, form);
+export async function saveMonitorSearchTerms(terms: string[]) {
+    return unwrap(await client.PUT('/api/bodyspace/settings/monitor-terms', { body: { terms } }));
 }
 
-export function regeneratePostImageWithFile(
-    postId: string,
-    campaignId: string,
-    opts: { feedback?: string; file?: File } = {},
-): Promise<{ ok: boolean; post: SocialPost }> {
-    const form = new FormData();
-    form.append('campaignId', campaignId);
-    if (opts.feedback) form.append('feedback', opts.feedback);
-    if (opts.file) form.append('referenceImageFile', opts.file);
-    return postForm(`/api/bodyspace/posts/${postId}/image/regenerate`, form);
+export async function getSelectedCampaignServices() {
+    return unwrap(await client.GET('/api/bodyspace/settings/campaign-services'));
 }
 
-// ── Settings store ────────────────────────────────────────────────────────────
-
-export function getMonitorSearchTerms(): Promise<{ ok: boolean; terms: string[] }> {
-    return fetchJson('/api/bodyspace/settings/monitor-terms');
-}
-
-export function saveMonitorSearchTerms(terms: string[]): Promise<{ ok: boolean; terms: string[] }> {
-    return putJson('/api/bodyspace/settings/monitor-terms', { terms });
-}
-
-export function getSelectedCampaignServices(): Promise<{ ok: boolean; services: string[] }> {
-    return fetchJson('/api/bodyspace/settings/campaign-services');
-}
-
-export function saveSelectedCampaignServices(ids: string[]): Promise<{ ok: boolean; services: string[] }> {
-    return putJson('/api/bodyspace/settings/campaign-services', { services: ids });
+export async function saveSelectedCampaignServices(ids: string[]) {
+    return unwrap(await client.PUT('/api/bodyspace/settings/campaign-services', { body: { services: ids } }));
 }
 
 // ── Wizard ────────────────────────────────────────────────────────────────────
 
-export function getMonitorPrompt(): Promise<{ ok: boolean; prompt: string }> {
-    return fetchJson('/api/bodyspace/wizard/monitor-prompt');
+export async function getMonitorPrompt() {
+    return unwrap(await client.GET('/api/bodyspace/wizard/monitor-prompt'));
 }
 
-export function streamMonitorWizard(terms: string[], callbacks: SSECallbacks<MonitorProgress>): () => void {
-    return streamSSEPost('/api/bodyspace/wizard/monitor/stream', { terms }, callbacks);
+export async function getCampaignPrompt() {
+    return unwrap(await client.GET('/api/bodyspace/wizard/campaign-prompt'));
 }
 
-export function suggestMonitorTerms(): Promise<{ ok: boolean; terms: string[] }> {
-    return postJson('/api/bodyspace/wizard/suggest-terms');
+export async function runCampaignWizard(opts: { ownerBrief?: string; selectedServices?: string[] }) {
+    return unwrap(await client.POST('/api/bodyspace/wizard/campaign', { body: opts }));
 }
 
-export function getCampaignPrompt(): Promise<{ ok: boolean; prompt: string }> {
-    return fetchJson('/api/bodyspace/wizard/campaign-prompt');
+export async function suggestMonitorTerms() {
+    return unwrap(await client.POST('/api/bodyspace/wizard/suggest-terms'));
 }
-
-export function runCampaignWizard(opts: {
-    ownerBrief?: string;
-    selectedServices?: string[];
-}): Promise<{ ok: boolean; campaign: Campaign }> {
-    return postJson('/api/bodyspace/wizard/campaign', opts);
-}
-
-// ── Agent triggers ────────────────────────────────────────────────────────────
 
 export interface MonitorProgress {
     type: string;
     message: string;
 }
 
-export function runFreshaWatcher(): Promise<{ ok: boolean }> {
-    return postJson('/api/bodyspace/run/fresha');
+export function streamMonitorWizard(terms: string[], callbacks: SSECallbacks<MonitorProgress>): () => void {
+    return streamSSEPost('/api/bodyspace/wizard/monitor/stream', { terms }, callbacks);
+}
+
+// ── Agent triggers ────────────────────────────────────────────────────────────
+
+export async function runFreshaWatcher() {
+    return unwrap(await client.POST('/api/bodyspace/run/fresha'));
 }
 
 export function streamMonitor(callbacks: SSECallbacks<MonitorProgress>): () => void {
     return streamSSE('/api/bodyspace/run/monitor/stream', callbacks);
 }
 
-export function runCampaignPlanner(ownerBrief?: string): Promise<{ ok: boolean }> {
-    return postJson('/api/bodyspace/run/campaign', { ownerBrief });
+export async function runCampaignPlanner(ownerBrief?: string) {
+    return unwrap(await client.POST('/api/bodyspace/run/campaign', { body: { ownerBrief } }));
 }
 
-export function runAll(ownerBrief?: string): Promise<{ ok: boolean }> {
-    return postJson('/api/bodyspace/run/all', { ownerBrief });
+export async function runAll(ownerBrief?: string) {
+    return unwrap(await client.POST('/api/bodyspace/run/all', { body: { ownerBrief } }));
 }
 
-export function scheduleCampaigns(): Promise<{ ok: boolean }> {
-    return postJson('/api/bodyspace/schedule');
+export async function scheduleCampaigns() {
+    return unwrap(await client.POST('/api/bodyspace/schedule'));
 }
 
-export function importFreshaCsv(csvContent: string, filename: string): Promise<{ ok: boolean; signals?: unknown }> {
-    const form = new FormData();
-    form.append('csvContent', csvContent);
-    form.append('filename', filename);
-    return postForm('/api/bodyspace/fresha/import', form);
+export async function importFreshaCsv(csvContent: string, filename: string) {
+    return unwrap(await client.POST('/api/bodyspace/fresha/import', { body: { csvContent, filename } }));
 }
 
 // ── Library ───────────────────────────────────────────────────────────────────
