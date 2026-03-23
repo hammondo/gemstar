@@ -1,4 +1,4 @@
-import { postForm, streamSSE, streamSSEPost, type SSECallbacks } from './http';
+import { postForm, fetchJson, postJson, patchJson, streamSSE, streamSSEPost, type SSECallbacks } from './http';
 import { client } from './client';
 import type { components } from './schema.d.ts';
 export type { SSECallbacks };
@@ -6,15 +6,11 @@ export type { SSECallbacks };
 // ── Generated types ────────────────────────────────────────────────────────
 
 export type Campaign = components['schemas']['Campaign'];
-export type SocialPost = components['schemas']['SocialPost'];
 export type TrendsBrief = components['schemas']['TrendsBrief'];
 export type ServiceAvailability = components['schemas']['ServiceAvailability'];
 export type AuthUser = components['schemas']['AuthUser'];
 export type ServiceInfo = components['schemas']['ServiceInfo'];
 export type BlogSync = components['schemas']['BlogSync'];
-export type CampaignStatus = components['schemas']['CampaignStatus'];
-export type PostStatus = components['schemas']['PostStatus'];
-export type ImageStatus = components['schemas']['ImageStatus'];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -37,7 +33,7 @@ export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
 export interface SocialPost {
     id: string;
     campaignId?: string;
-    source: PostSource;
+    source?: PostSource;
     serviceId?: string;
     variantTag?: VariantTag;
     platform: 'instagram' | 'facebook';
@@ -55,6 +51,10 @@ export interface SocialPost {
     scheduledFor?: string;
     publishedAt?: string;
     createdAt: string;
+}
+
+export async function getMe() {
+    return unwrap(await client.GET('/api/auth/me'));
 }
 
 export async function logout() {
