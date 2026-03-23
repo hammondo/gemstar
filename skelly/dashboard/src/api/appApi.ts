@@ -11,6 +11,8 @@ export type ServiceAvailability = components['schemas']['ServiceAvailability'];
 export type AuthUser = components['schemas']['AuthUser'];
 export type ServiceInfo = components['schemas']['ServiceInfo'];
 export type BlogSync = components['schemas']['BlogSync'];
+export type AvailabilitySignal = components['schemas']['AvailabilitySignal'];
+export type FbInsightRow = { [key: string]: string | number };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

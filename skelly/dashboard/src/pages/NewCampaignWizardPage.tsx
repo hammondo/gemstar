@@ -682,7 +682,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
             {state === 'done' && campaign && (
                 <div className="mb-5 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
                     <p className="text-xs font-semibold text-teal-700">✓ Campaign generated</p>
-                    <p className="text-charcoal mt-0.5 text-sm font-semibold">{campaign.title}</p>
+                    <p className="text-charcoal mt-0.5 text-sm font-semibold">{campaign.name}</p>
                     {campaign.description && <p className="text-muted mt-1 text-xs">{campaign.description}</p>}
                 </div>
             )}
