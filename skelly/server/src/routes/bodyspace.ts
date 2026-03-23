@@ -722,6 +722,51 @@ bodyspaceRouter.post('/run/library', async (req, res) => {
     }
 });
 
+bodyspaceRouter.post('/run/library/stream', async (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+    });
+
+    const send = (event: string, data: unknown) => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let closed = false;
+    req.on('close', () => { closed = true; });
+
+    const { serviceIds, postsPerService } = req.body as { serviceIds?: unknown; postsPerService?: unknown };
+    if (!Array.isArray(serviceIds) || !serviceIds.every((s) => typeof s === 'string')) {
+        send('error', { message: 'serviceIds must be an array of strings' });
+        res.end();
+        return;
+    }
+
+    const count = typeof postsPerService === 'number' ? postsPerService : 6;
+    const progress = (p: { type: string; message: string }) => { if (!closed) send('progress', p); };
+
+    try {
+        const agent = new LibraryGeneratorAgent();
+        const posts = await agent.run(serviceIds as string[], count, progress);
+
+        progress({ type: 'status', message: 'Post copy ready — generating images…' });
+
+        const imageGen = new ImageGeneratorAgent();
+        await imageGen.runForPosts(posts, progress);
+
+        if (!closed) {
+            send('complete', { ok: true });
+            res.end();
+        }
+    } catch (err) {
+        if (!closed) {
+            send('error', { message: String(err) });
+            res.end();
+        }
+    }
+});
+
 bodyspaceRouter.post('/library/posts/:id/used', (req, res) => {
     try {
         markLibraryPostUsed(req.params.id);

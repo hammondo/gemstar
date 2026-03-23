@@ -355,11 +355,17 @@ export function getLibraryPosts(filters?: {
     return fetchJson(`/api/bodyspace/library${qs}`);
 }
 
-export function generateLibraryPosts(
+export interface LibraryProgress {
+    type: string;
+    message: string;
+}
+
+export function streamGenerateLibraryPosts(
     serviceIds: string[],
-    postsPerService?: number,
-): Promise<{ ok: boolean; posts: SocialPost[] }> {
-    return postJson('/api/bodyspace/run/library', { serviceIds, postsPerService });
+    postsPerService: number,
+    callbacks: SSECallbacks<LibraryProgress>,
+): () => void {
+    return streamSSEPost('/api/bodyspace/run/library/stream', { serviceIds, postsPerService }, callbacks);
 }
 
 export function scheduleLibraryPost(postId: string, scheduledFor: string): Promise<{ ok: boolean; post: SocialPost }> {

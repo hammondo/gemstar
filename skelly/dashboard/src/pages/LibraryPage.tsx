@@ -1,13 +1,14 @@
 import { BookOpen, LayoutGrid, List, RefreshCw, Sparkles } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     type AvailabilitySignal,
+    type LibraryProgress,
     type ServiceInfo,
     type SocialPost,
     type PostStatus,
     type VariantTag,
-    generateLibraryPosts,
+    streamGenerateLibraryPosts,
     getLibraryPosts,
     getServices,
     getSignals,
@@ -50,6 +51,30 @@ const platformLabel: Record<string, string> = {
     facebook: 'FB',
 };
 
+function GenerateProgressLog({
+    entries,
+    state,
+}: {
+    entries: string[];
+    state: 'idle' | 'running' | 'done' | 'error';
+}) {
+    const bottomRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [entries]);
+
+    return (
+        <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-warm-200 bg-warm-50 px-4 py-3 font-mono text-xs">
+            {entries.map((line, i) => (
+                <p key={i} className="leading-relaxed text-muted">{line}</p>
+            ))}
+            {state === 'running' && <p className="animate-pulse text-teal-700">Running…</p>}
+            {state === 'done' && <p className="font-semibold text-green-600">✓ Done</p>}
+            <div ref={bottomRef} />
+        </div>
+    );
+}
+
 export default function LibraryPage() {
     const [posts, setPosts] = useState<SocialPost[]>([]);
     const [services, setServices] = useState<ServiceInfo[]>([]);
@@ -74,8 +99,10 @@ export default function LibraryPage() {
     const [showGenerate, setShowGenerate] = useState(false);
     const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
     const [postsPerService, setPostsPerService] = useState(6);
-    const [generating, setGenerating] = useState(false);
+    const [generateState, setGenerateState] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+    const [generateLog, setGenerateLog] = useState<string[]>([]);
     const [generateError, setGenerateError] = useState<string | null>(null);
+    const stopGenerateRef = useRef<(() => void) | null>(null);
 
     // Per-post acting state
     const [acting, setActing] = useState<Record<string, string>>({});
@@ -168,20 +195,37 @@ export default function LibraryPage() {
         }
     }
 
-    async function handleGenerate() {
+    function handleGenerate() {
         if (selectedServices.size === 0) return;
-        setGenerating(true);
+        setGenerateState('running');
+        setGenerateLog([]);
         setGenerateError(null);
-        try {
-            const { posts: newPosts } = await generateLibraryPosts([...selectedServices], postsPerService);
-            setPosts((prev) => [...newPosts, ...prev]);
-            setShowGenerate(false);
-            setSelectedServices(new Set());
-        } catch (err) {
-            setGenerateError(err instanceof Error ? err.message : 'Generation failed');
-        } finally {
-            setGenerating(false);
-        }
+        const stop = streamGenerateLibraryPosts([...selectedServices], postsPerService, {
+            onProgress(data: LibraryProgress) {
+                setGenerateLog((prev) => [...prev, data.message]);
+            },
+            onComplete() {
+                setGenerateState('done');
+                stopGenerateRef.current = null;
+                void loadPosts();
+            },
+            onError(err: string) {
+                setGenerateState('error');
+                setGenerateError(err);
+                stopGenerateRef.current = null;
+            },
+        });
+        stopGenerateRef.current = stop;
+    }
+
+    function closeGeneratePanel() {
+        stopGenerateRef.current?.();
+        stopGenerateRef.current = null;
+        setShowGenerate(false);
+        setGenerateState('idle');
+        setGenerateLog([]);
+        setGenerateError(null);
+        setSelectedServices(new Set());
     }
 
     function toggleService(id: string) {
@@ -284,59 +328,65 @@ export default function LibraryPage() {
                 <div className="mb-6 rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
                     <h3 className="mb-4 text-sm font-semibold text-charcoal">Generate library posts</h3>
 
-                    <div className="mb-4">
-                        <ServiceSelector
-                            services={services}
-                            selected={selectedServices}
-                            signals={signals}
-                            disabled={generating}
-                            label="Services to generate posts for"
-                            onToggle={toggleService}
-                            onToggleGroup={(ids, allSelected) => {
-                                setSelectedServices((prev) => {
-                                    const next = new Set(prev);
-                                    if (allSelected) ids.forEach((id) => next.delete(id));
-                                    else ids.forEach((id) => next.add(id));
-                                    return next;
-                                });
-                            }}
-                            onClear={() => setSelectedServices(new Set())}
-                        />
-                    </div>
+                    {generateState !== 'running' && generateState !== 'done' && (
+                        <>
+                            <div className="mb-4">
+                                <ServiceSelector
+                                    services={services}
+                                    selected={selectedServices}
+                                    signals={signals}
+                                    label="Services to generate posts for"
+                                    onToggle={toggleService}
+                                    onToggleGroup={(ids, allSelected) => {
+                                        setSelectedServices((prev) => {
+                                            const next = new Set(prev);
+                                            if (allSelected) ids.forEach((id) => next.delete(id));
+                                            else ids.forEach((id) => next.add(id));
+                                            return next;
+                                        });
+                                    }}
+                                    onClear={() => setSelectedServices(new Set())}
+                                />
+                            </div>
 
-                    <div className="mb-4 flex items-center gap-3">
-                        <label className="text-xs text-muted whitespace-nowrap">Posts per service:</label>
-                        <input
-                            type="number"
-                            min={1}
-                            max={12}
-                            value={postsPerService}
-                            onChange={(e) => setPostsPerService(Number(e.target.value))}
-                            className="w-20 rounded-lg border border-warm-200 px-3 py-1.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-teal-400"
-                        />
-                    </div>
-
-                    {generateError && (
-                        <p className="mb-3 text-xs text-red-600">{generateError}</p>
+                            <div className="mb-4 flex items-center gap-3">
+                                <label className="text-xs text-muted whitespace-nowrap">Posts per service:</label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={12}
+                                    value={postsPerService}
+                                    onChange={(e) => setPostsPerService(Number(e.target.value))}
+                                    className="w-20 rounded-lg border border-warm-200 px-3 py-1.5 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-teal-400"
+                                />
+                            </div>
+                        </>
                     )}
 
-                    <div className="flex gap-2">
+                    {(generateState === 'running' || generateLog.length > 0) && (
+                        <GenerateProgressLog entries={generateLog} state={generateState} />
+                    )}
+
+                    {generateError && (
+                        <p className="mt-3 text-xs text-red-600">{generateError}</p>
+                    )}
+
+                    <div className="mt-4 flex gap-2">
+                        {generateState !== 'running' && generateState !== 'done' && (
+                            <button
+                                onClick={handleGenerate}
+                                disabled={selectedServices.size === 0}
+                                className="flex items-center gap-1.5 rounded-lg bg-teal-400 px-4 py-2 text-sm font-semibold text-charcoal transition hover:brightness-110 disabled:opacity-50"
+                            >
+                                <Sparkles size={14} />
+                                Generate {selectedServices.size > 0 ? `${selectedServices.size * postsPerService} posts` : ''}
+                            </button>
+                        )}
                         <button
-                            onClick={() => void handleGenerate()}
-                            disabled={generating || selectedServices.size === 0}
-                            className="flex items-center gap-1.5 rounded-lg bg-teal-400 px-4 py-2 text-sm font-semibold text-charcoal transition hover:brightness-110 disabled:opacity-50"
-                        >
-                            {generating ? (
-                                <><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-charcoal border-t-transparent" /> Generating…</>
-                            ) : (
-                                <><Sparkles size={14} /> Generate {selectedServices.size > 0 ? `${selectedServices.size * postsPerService} posts` : ''}</>
-                            )}
-                        </button>
-                        <button
-                            onClick={() => { setShowGenerate(false); setSelectedServices(new Set()); setGenerateError(null); }}
+                            onClick={closeGeneratePanel}
                             className="rounded-lg border border-warm-200 px-4 py-2 text-sm text-muted transition hover:bg-warm-100"
                         >
-                            Cancel
+                            {generateState === 'done' ? 'Close' : 'Cancel'}
                         </button>
                     </div>
                 </div>

@@ -43,16 +43,25 @@ export class LibraryGeneratorAgent {
         }
     }
 
-    async run(serviceIds: string[], postsPerService = 6): Promise<SocialPost[]> {
+    async run(
+        serviceIds: string[],
+        postsPerService = 6,
+        onProgress?: (p: { type: string; message: string }) => void,
+    ): Promise<SocialPost[]> {
         const allSaved: SocialPost[] = [];
 
-        for (const serviceId of serviceIds) {
+        for (let i = 0; i < serviceIds.length; i++) {
+            const serviceId = serviceIds[i];
             const service = getServiceById(serviceId);
             if (!service) {
                 this.log.warn({ serviceId }, 'Service not found — skipping');
                 continue;
             }
 
+            onProgress?.({
+                type: 'status',
+                message: `Generating posts for ${service.name} (${i + 1}/${serviceIds.length})…`,
+            });
             this.log.info({ serviceId, serviceName: service.name }, 'Generating library posts');
 
             const raw = settings.mockAnthropic
@@ -74,6 +83,7 @@ export class LibraryGeneratorAgent {
             const saved = saveLibraryPosts(toSave);
             allSaved.push(...saved);
 
+            onProgress?.({ type: 'status', message: `✓ ${saved.length} posts ready for ${service.name}` });
             this.log.info({ serviceId, count: saved.length }, 'Library posts saved');
         }
 

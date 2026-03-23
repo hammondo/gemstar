@@ -100,7 +100,10 @@ export class ImageGeneratorAgent {
 
     // ── Library post batch generation ───────────────────────────────────────
 
-    async runForPosts(posts: SocialPost[]): Promise<void> {
+    async runForPosts(
+        posts: SocialPost[],
+        onProgress?: (p: { type: string; message: string }) => void,
+    ): Promise<void> {
         const pending = posts.filter(
             (p) => !p.imageUrl || p.imageStatus === 'needed' || p.imageStatus === 'generating'
         );
@@ -123,9 +126,11 @@ export class ImageGeneratorAgent {
 
             try {
                 updatePostImage(post.id, '', 'generating');
+                onProgress?.({ type: 'status', message: `Generating image ${i + 1} of ${pending.length}…` });
                 const imageUrl = await this.generateForPost(post, `library/${post.id}`, imageDir);
                 updatePostImage(post.id, imageUrl, 'draft');
                 success++;
+                onProgress?.({ type: 'status', message: `✓ Image ${success} of ${pending.length} done` });
                 this.log.info({ postId: post.id, serviceId: post.serviceId }, 'Library image generated');
             } catch (err) {
                 if (err instanceof RateLimitError) {
@@ -133,6 +138,7 @@ export class ImageGeneratorAgent {
                         { postId: post.id, remaining: pending.length - i },
                         'Rate limited by Replicate — retrying in 20s'
                     );
+                    onProgress?.({ type: 'status', message: 'Rate limited — waiting before retrying…' });
                     updatePostImage(post.id, '', 'needed');
                     await sleep(20_000);
                     i--; // retry this post
