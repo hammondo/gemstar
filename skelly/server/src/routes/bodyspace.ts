@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import express, { Router } from 'express';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import multer from 'multer';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -31,6 +32,33 @@ import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
+
+// ── SSE helper ────────────────────────────────────────────────────────────────
+// Sets up an SSE response and returns a `send` helper + teardown.
+// Sends `: ping` comments every 25s so proxies don't close idle connections.
+function setupSSE(req: IncomingMessage, res: ServerResponse) {
+    req.setTimeout(0);
+    res.socket?.setTimeout(0);
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    });
+
+    let closed = false;
+    const keepalive = setInterval(() => { if (!closed) res.write(': ping\n\n'); }, 25_000);
+
+    req.on('close', () => { closed = true; clearInterval(keepalive); });
+
+    const send = (event: string, data: unknown) => {
+        if (!closed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const done = () => { clearInterval(keepalive); if (!closed) res.end(); };
+
+    return { send, done, isClosed: () => closed };
+}
 
 const bodyspaceRouter = Router();
 const upload = multer({
@@ -723,28 +751,17 @@ bodyspaceRouter.post('/run/library', async (req, res) => {
 });
 
 bodyspaceRouter.post('/run/library/stream', async (req, res) => {
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-    });
-
-    const send = (event: string, data: unknown) => {
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    };
-
-    let closed = false;
-    req.on('close', () => { closed = true; });
+    const { send, done, isClosed } = setupSSE(req, res);
 
     const { serviceIds, postsPerService } = req.body as { serviceIds?: unknown; postsPerService?: unknown };
     if (!Array.isArray(serviceIds) || !serviceIds.every((s) => typeof s === 'string')) {
         send('error', { message: 'serviceIds must be an array of strings' });
-        res.end();
+        done();
         return;
     }
 
     const count = typeof postsPerService === 'number' ? postsPerService : 6;
-    const progress = (p: { type: string; message: string }) => { if (!closed) send('progress', p); };
+    const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
 
     try {
         const agent = new LibraryGeneratorAgent();
@@ -755,33 +772,18 @@ bodyspaceRouter.post('/run/library/stream', async (req, res) => {
         const imageGen = new ImageGeneratorAgent();
         await imageGen.runForPosts(posts, progress);
 
-        if (!closed) {
-            send('complete', { ok: true });
-            res.end();
-        }
+        send('complete', { ok: true });
+        done();
     } catch (err) {
-        if (!closed) {
-            send('error', { message: String(err) });
-            res.end();
-        }
+        send('error', { message: String(err) });
+        done();
     }
 });
 
 bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-    });
+    const { send, done, isClosed } = setupSSE(req, res);
 
-    const send = (event: string, data: unknown) => {
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    };
-
-    let closed = false;
-    req.on('close', () => { closed = true; });
-
-    const progress = (p: { type: string; message: string }) => { if (!closed) send('progress', p); };
+    const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
 
     try {
         const allLibraryPosts = getLibraryPosts();
@@ -789,7 +791,7 @@ bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
 
         if (needed.length === 0) {
             send('complete', { ok: true });
-            res.end();
+            done();
             return;
         }
 
@@ -798,15 +800,11 @@ bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
         const imageGen = new ImageGeneratorAgent();
         await imageGen.runForPosts(needed, progress);
 
-        if (!closed) {
-            send('complete', { ok: true });
-            res.end();
-        }
+        send('complete', { ok: true });
+        done();
     } catch (err) {
-        if (!closed) {
-            send('error', { message: String(err) });
-            res.end();
-        }
+        send('error', { message: String(err) });
+        done();
     }
 });
 
