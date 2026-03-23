@@ -1,0 +1,2633 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Gemstar / BodySpace API",
+    "version": "1.0.0",
+    "description": "API for the BodySpace Recovery Studio marketing automation platform. Protected routes under `/api/bodyspace` require an active Azure AD session."
+  },
+  "tags": [
+    {
+      "name": "System",
+      "description": "Health, status and diagnostics"
+    },
+    {
+      "name": "Auth",
+      "description": "Microsoft Entra ID authentication"
+    },
+    {
+      "name": "Campaigns",
+      "description": "Campaign lifecycle management"
+    },
+    {
+      "name": "Posts",
+      "description": "Social post management and approvals"
+    },
+    {
+      "name": "Trends",
+      "description": "Market trends briefs"
+    },
+    {
+      "name": "Signals",
+      "description": "Fresha booking availability signals"
+    },
+    {
+      "name": "Analytics",
+      "description": "Meta (Instagram/Facebook) analytics"
+    },
+    {
+      "name": "Settings",
+      "description": "Persistent settings store"
+    },
+    {
+      "name": "Wizard",
+      "description": "Guided campaign and monitor setup flows"
+    },
+    {
+      "name": "Agents",
+      "description": "Manual agent triggers"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "AvailabilitySignal": {
+        "type": "string",
+        "enum": [
+          "push",
+          "hold",
+          "pause"
+        ],
+        "description": "Booking availability signal"
+      },
+      "CampaignStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "pending_review",
+          "approved",
+          "rejected",
+          "scheduled",
+          "published"
+        ],
+        "description": "Current lifecycle status of a campaign"
+      },
+      "PostStatus": {
+        "type": "string",
+        "enum": [
+          "draft",
+          "pending_review",
+          "approved",
+          "rejected",
+          "scheduled",
+          "published"
+        ],
+        "description": "Current lifecycle status of a social post"
+      },
+      "ImageStatus": {
+        "type": "string",
+        "enum": [
+          "needed",
+          "generating",
+          "draft",
+          "approved"
+        ],
+        "description": "Image generation status"
+      },
+      "Platform": {
+        "type": "string",
+        "enum": [
+          "instagram",
+          "facebook"
+        ],
+        "description": "Social media platform"
+      },
+      "PostType": {
+        "type": "string",
+        "enum": [
+          "feed",
+          "story",
+          "reel"
+        ],
+        "description": "Type of social media post"
+      },
+      "ContentPillar": {
+        "type": "string",
+        "enum": [
+          "education",
+          "promotion",
+          "community",
+          "social_proof",
+          "seasonal"
+        ],
+        "description": "Content strategy pillar"
+      },
+      "SocialPost": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "post_abc123"
+          },
+          "campaignId": {
+            "type": "string",
+            "example": "cmp_xyz789"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/Platform"
+          },
+          "postType": {
+            "$ref": "#/components/schemas/PostType"
+          },
+          "contentPillar": {
+            "$ref": "#/components/schemas/ContentPillar"
+          },
+          "copy": {
+            "type": "string",
+            "description": "Post body text"
+          },
+          "ownerEdit": {
+            "type": "string",
+            "description": "Owner override for post copy"
+          },
+          "imageDirection": {
+            "type": "string",
+            "description": "Instructions for image generation"
+          },
+          "hashtags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "callToAction": {
+            "type": "string"
+          },
+          "scheduledFor": {
+            "type": "string",
+            "example": "2025-06-01T09:00:00+08:00"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PostStatus"
+          },
+          "imageUrl": {
+            "type": "string",
+            "description": "Publicly accessible URL of the generated image"
+          },
+          "imageStatus": {
+            "$ref": "#/components/schemas/ImageStatus"
+          },
+          "rejectionReason": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2025-05-20T12:00:00.000Z"
+          },
+          "publishedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "campaignId",
+          "platform",
+          "postType",
+          "contentPillar",
+          "copy",
+          "imageDirection",
+          "hashtags",
+          "callToAction",
+          "status",
+          "createdAt"
+        ]
+      },
+      "Campaign": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cmp_xyz789"
+          },
+          "name": {
+            "type": "string",
+            "example": "Winter Wellness Push"
+          },
+          "theme": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "targetServices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "durationWeeks": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/CampaignStatus"
+          },
+          "freshaSignals": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "signal": {
+                  "$ref": "#/components/schemas/AvailabilitySignal"
+                },
+                "slots": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "signal",
+                "slots"
+              ]
+            }
+          },
+          "trendsBriefId": {
+            "type": "string"
+          },
+          "ownerNotes": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "approvedAt": {
+            "type": "string"
+          },
+          "posts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SocialPost"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "theme",
+          "description",
+          "targetServices",
+          "durationWeeks",
+          "status",
+          "freshaSignals",
+          "createdAt",
+          "posts"
+        ]
+      },
+      "TrendsBrief": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "weekOf": {
+            "type": "string",
+            "example": "2025-06-02"
+          },
+          "competitorSummary": {
+            "type": "string"
+          },
+          "trendSignals": {
+            "type": "string"
+          },
+          "seasonalFactors": {
+            "type": "string"
+          },
+          "recommendedFocus": {
+            "type": "string"
+          },
+          "opportunities": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "weekOf",
+          "competitorSummary",
+          "trendSignals",
+          "seasonalFactors",
+          "recommendedFocus",
+          "opportunities",
+          "sources",
+          "confidence",
+          "createdAt"
+        ]
+      },
+      "ServiceAvailability": {
+        "type": "object",
+        "properties": {
+          "serviceId": {
+            "type": "string"
+          },
+          "serviceName": {
+            "type": "string"
+          },
+          "availableSlots": {
+            "type": "integer"
+          },
+          "totalSlots": {
+            "type": "integer"
+          },
+          "bookedSlots": {
+            "type": "integer"
+          },
+          "signal": {
+            "$ref": "#/components/schemas/AvailabilitySignal"
+          },
+          "pushThreshold": {
+            "type": "integer"
+          },
+          "pauseThreshold": {
+            "type": "integer"
+          },
+          "recordedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "serviceId",
+          "serviceName",
+          "availableSlots",
+          "signal",
+          "pushThreshold",
+          "pauseThreshold",
+          "recordedAt"
+        ]
+      },
+      "AuthUser": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email"
+        ]
+      },
+      "ServiceInfo": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category"
+        ]
+      },
+      "BlogSync": {
+        "type": "object",
+        "properties": {
+          "attempted": {
+            "type": "boolean"
+          },
+          "synced": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "documentId": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "attempted",
+          "synced"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "error"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Server is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "ok"
+                      ]
+                    },
+                    "service": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "service",
+                    "timestamp"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get current authenticated user",
+        "responses": {
+          "200": {
+            "description": "Current user session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/AuthUser"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "user"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Destroy session and log out",
+        "responses": {
+          "200": {
+            "description": "Session destroyed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/campaigns": {
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "summary": "List campaigns, optionally filtered by status",
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/CampaignStatus"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of campaigns",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "campaigns": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Campaign"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "campaigns"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/campaigns/{id}": {
+      "get": {
+        "tags": [
+          "Campaigns"
+        ],
+        "summary": "Get a single campaign by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "campaign": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "campaign"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/campaigns/{id}/approve": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "summary": "Approve a campaign and trigger scheduling",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Campaign approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "campaign": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "campaign"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/campaigns/{id}/reject": {
+      "post": {
+        "tags": [
+          "Campaigns"
+        ],
+        "summary": "Reject a campaign",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Campaign rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "campaign": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "campaign"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/posts/{id}": {
+      "get": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Get a single post by ID",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Post detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "post": {
+                      "$ref": "#/components/schemas/SocialPost"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "post"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Update post copy and optional scheduled time",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "copy": {
+                    "type": "string"
+                  },
+                  "scheduledFor": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "copy"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "post": {
+                      "$ref": "#/components/schemas/SocialPost"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "post"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/posts/{id}/approve": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Approve a post and trigger blog sync",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "copy": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Post approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "campaignId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "blogSync": {
+                      "$ref": "#/components/schemas/BlogSync"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "campaignId",
+                    "blogSync"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/posts/{id}/reject": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Reject a post",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Post rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "campaignId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "campaignId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/posts/{id}/image": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Set post image URL manually",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "imageUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "required": [
+                  "imageUrl"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image URL set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "postId": {
+                      "type": "string"
+                    },
+                    "imageUrl": {
+                      "type": "string"
+                    },
+                    "imageStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "postId",
+                    "imageUrl",
+                    "imageStatus"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/posts/{id}/image/upload": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Upload an image file for a post (owner upload, bypasses AI)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "imageFile": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image uploaded, post updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "post": {
+                      "$ref": "#/components/schemas/SocialPost"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "post"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/posts/{id}/image/approve": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Approve the current image draft",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "post": {
+                      "$ref": "#/components/schemas/SocialPost"
+                    },
+                    "blogSync": {
+                      "$ref": "#/components/schemas/BlogSync"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "post",
+                    "blogSync"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/posts/{id}/image/regenerate": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Regenerate the AI image for a post, with optional feedback and reference image",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "campaignId": {
+                    "type": "string"
+                  },
+                  "feedback": {
+                    "type": "string"
+                  },
+                  "referenceImageUrl": {
+                    "type": "string"
+                  },
+                  "referenceImageFile": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "campaignId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image regenerated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "postId": {
+                      "type": "string"
+                    },
+                    "imageUrl": {
+                      "type": "string"
+                    },
+                    "imageStatus": {
+                      "type": "string",
+                      "enum": [
+                        "draft"
+                      ]
+                    },
+                    "feedbackApplied": {
+                      "type": "boolean"
+                    },
+                    "referenceApplied": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "postId",
+                    "imageUrl",
+                    "imageStatus",
+                    "feedbackApplied",
+                    "referenceApplied"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/posts/{id}/blog/sync": {
+      "post": {
+        "tags": [
+          "Posts"
+        ],
+        "summary": "Manually sync a post to the Sanity blog (retry)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync attempted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "postId": {
+                      "type": "string"
+                    },
+                    "blogSync": {
+                      "$ref": "#/components/schemas/BlogSync"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "postId",
+                    "blogSync"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/trends/latest": {
+      "get": {
+        "tags": [
+          "Trends"
+        ],
+        "summary": "Get the latest trends brief",
+        "responses": {
+          "200": {
+            "description": "Latest trends brief, or null if none exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "brief": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/TrendsBrief"
+                        },
+                        {
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "brief"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/trends/{id}": {
+      "patch": {
+        "tags": [
+          "Trends"
+        ],
+        "summary": "Update a trends brief",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "competitorSummary": {
+                    "type": "string"
+                  },
+                  "trendSignals": {
+                    "type": "string"
+                  },
+                  "seasonalFactors": {
+                    "type": "string"
+                  },
+                  "recommendedFocus": {
+                    "type": "string"
+                  },
+                  "opportunities": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "competitorSummary",
+                  "trendSignals",
+                  "seasonalFactors",
+                  "recommendedFocus",
+                  "opportunities"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated trends brief",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "brief": {
+                      "$ref": "#/components/schemas/TrendsBrief"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "brief"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/signals": {
+      "get": {
+        "tags": [
+          "Signals"
+        ],
+        "summary": "Get latest Fresha booking availability signals",
+        "responses": {
+          "200": {
+            "description": "Map of service ID to availability data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "signals": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "#/components/schemas/ServiceAvailability"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "signals"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/status": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get BodySpace system status and campaign counts",
+        "responses": {
+          "200": {
+            "description": "Status overview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "schedules": {
+                      "type": "object",
+                      "properties": {
+                        "freshaWatcher": {
+                          "type": "string"
+                        },
+                        "monitor": {
+                          "type": "string"
+                        },
+                        "campaignPlanner": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "freshaWatcher",
+                        "monitor",
+                        "campaignPlanner"
+                      ]
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "pendingReviewCampaigns": {
+                          "type": "integer"
+                        },
+                        "approvedCampaigns": {
+                          "type": "integer"
+                        },
+                        "scheduledCampaigns": {
+                          "type": "integer"
+                        },
+                        "scheduledPosts": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "pendingReviewCampaigns",
+                        "approvedCampaigns",
+                        "scheduledCampaigns",
+                        "scheduledPosts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "counts"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/services": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "List all configured services",
+        "responses": {
+          "200": {
+            "description": "Service list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "services": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceInfo"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "services"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/analytics/meta": {
+      "get": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Get Meta (Instagram/Facebook) analytics",
+        "responses": {
+          "200": {
+            "description": "Analytics data, or unconfigured indicator",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "configured": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "configured"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "configured": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "fetchedAt": {
+                          "type": "string"
+                        },
+                        "instagram": {
+                          "type": "object",
+                          "properties": {
+                            "account": {
+                              "type": "object",
+                              "properties": {
+                                "username": {
+                                  "type": "string"
+                                },
+                                "followersCount": {
+                                  "type": "integer"
+                                },
+                                "mediaCount": {
+                                  "type": "integer"
+                                }
+                              },
+                              "required": [
+                                "username",
+                                "followersCount",
+                                "mediaCount"
+                              ]
+                            },
+                            "recentPosts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "caption": {
+                                    "type": "string"
+                                  },
+                                  "mediaType": {
+                                    "type": "string",
+                                    "enum": [
+                                      "IMAGE",
+                                      "VIDEO",
+                                      "CAROUSEL_ALBUM",
+                                      "REEL"
+                                    ]
+                                  },
+                                  "timestamp": {
+                                    "type": "string"
+                                  },
+                                  "permalink": {
+                                    "type": "string"
+                                  },
+                                  "likeCount": {
+                                    "type": "integer"
+                                  },
+                                  "commentsCount": {
+                                    "type": "integer"
+                                  },
+                                  "views": {
+                                    "type": "integer"
+                                  },
+                                  "reach": {
+                                    "type": "integer"
+                                  },
+                                  "saved": {
+                                    "type": "integer"
+                                  },
+                                  "shares": {
+                                    "type": "integer"
+                                  },
+                                  "totalInteractions": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "caption",
+                                  "mediaType",
+                                  "timestamp",
+                                  "permalink",
+                                  "likeCount",
+                                  "commentsCount",
+                                  "views",
+                                  "reach",
+                                  "saved",
+                                  "shares",
+                                  "totalInteractions"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "account",
+                            "recentPosts"
+                          ]
+                        },
+                        "facebook": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "fanCount": {
+                                  "type": "integer"
+                                },
+                                "series": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        }
+                                      ]
+                                    }
+                                  }
+                                },
+                                "metrics": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "fanCount",
+                                "series",
+                                "metrics"
+                              ]
+                            },
+                            "recentPosts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  },
+                                  "createdTime": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "message",
+                                  "createdTime"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "page",
+                            "recentPosts"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "configured",
+                        "fetchedAt"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/analytics/meta/refresh": {
+      "post": {
+        "tags": [
+          "Analytics"
+        ],
+        "summary": "Clear the Meta analytics cache",
+        "responses": {
+          "200": {
+            "description": "Cache cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/settings/monitor-terms": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get monitor search terms",
+        "responses": {
+          "200": {
+            "description": "Current search terms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "terms"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Save monitor search terms",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "terms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "terms"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved terms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "terms"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/settings/campaign-services": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get selected campaign service IDs",
+        "responses": {
+          "200": {
+            "description": "Selected service IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "services": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "services"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Save selected campaign service IDs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "services": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "services"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved service IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "services": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "services"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/wizard/monitor-prompt": {
+      "get": {
+        "tags": [
+          "Wizard"
+        ],
+        "summary": "Get the current monitor agent prompt",
+        "responses": {
+          "200": {
+            "description": "Prompt text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "prompt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "prompt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/wizard/monitor/stream": {
+      "post": {
+        "tags": [
+          "Wizard"
+        ],
+        "summary": "Run the monitor agent with optional custom terms, streamed as SSE",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "terms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream of progress events (text/event-stream)"
+          }
+        }
+      }
+    },
+    "/api/bodyspace/wizard/campaign-prompt": {
+      "get": {
+        "tags": [
+          "Wizard"
+        ],
+        "summary": "Get the campaign planner prompt",
+        "responses": {
+          "200": {
+            "description": "Prompt text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "prompt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "prompt"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/wizard/campaign": {
+      "post": {
+        "tags": [
+          "Wizard"
+        ],
+        "summary": "Run the campaign wizard to generate a new campaign",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ownerBrief": {
+                    "type": "string"
+                  },
+                  "selectedServices": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Generated campaign",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "campaign": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "campaign"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/wizard/suggest-terms": {
+      "post": {
+        "tags": [
+          "Wizard"
+        ],
+        "summary": "AI-powered search term suggestions for the monitor wizard",
+        "responses": {
+          "200": {
+            "description": "Suggested search terms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "terms"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/run/fresha": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Manually trigger the Fresha availability watcher",
+        "responses": {
+          "200": {
+            "description": "Agent completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/run/monitor/stream": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Run the market monitor agent, streamed as SSE",
+        "responses": {
+          "200": {
+            "description": "SSE stream of progress events (text/event-stream)"
+          }
+        }
+      }
+    },
+    "/api/bodyspace/run/campaign": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Manually trigger the campaign planner agent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ownerBrief": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/run/all": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Manually trigger all agents in sequence",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ownerBrief": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "All agents completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/run/image-generator": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Manually trigger image generation for a campaign",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "campaignId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "campaignId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image generation started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "campaignId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "message",
+                    "campaignId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/schedule": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Manually trigger post scheduler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "campaignId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Scheduling completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/fresha/import": {
+      "post": {
+        "tags": [
+          "Agents"
+        ],
+        "summary": "Import a Fresha CSV export and run the availability watcher",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "csvContent": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "csvContent"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "CSV imported and signals refreshed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "filename": {
+                      "type": "string"
+                    },
+                    "signals": {}
+                  },
+                  "required": [
+                    "ok",
+                    "filename"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

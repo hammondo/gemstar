@@ -101,7 +101,7 @@ export default function DashboardPage() {
                                     className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-warm-100"
                                 >
                                     <div className="min-w-0">
-                                        <p className="truncate text-sm font-semibold text-charcoal">{c.title}</p>
+                                        <p className="truncate text-sm font-semibold text-charcoal">{c.name}</p>
                                         <p className="mt-0.5 text-xs text-muted">
                                             {c.posts.length} post{c.posts.length !== 1 ? 's' : ''} ·{' '}
                                             {new Date(c.createdAt).toLocaleDateString()}
