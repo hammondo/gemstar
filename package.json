@@ -1,28 +1,23 @@
 {
-  "name": "skelly",
+  "name": "bodyspace",
   "version": "1.0.0",
   "private": true,
-  "description": "Skelly monorepo app scaffold",
+  "description": "Bodyspace Recovery Studio — monorepo",
   "scripts": {
-    "dev": "concurrently -k -n SERVER,DASHBOARD -c cyan,yellow \"npm --prefix server run dev\" \"npm --prefix dashboard run dev\"",
+    "dev": "concurrently -k -n SERVER,DASHBOARD,WEBSITE -c cyan,yellow,green \"npm --prefix server run dev\" \"npm --prefix dashboard run dev\" \"npm --prefix website run dev\"",
     "dev:server": "npm --prefix server run dev",
     "dev:dashboard": "npm --prefix dashboard run dev",
-    "build": "npm run build:server && npm run build:dashboard",
+    "dev:website": "npm --prefix website run dev",
+    "build": "npm run build:server && npm run build:dashboard && npm run build:website",
     "build:server": "npm --prefix server run build",
     "build:dashboard": "npm --prefix dashboard run build",
+    "build:website": "npm --prefix website run build",
     "start": "npm --prefix server run start",
     "start:server": "npm --prefix server run start",
+    "test": "npm --prefix server run test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
-  "keywords": [
-    "typescript",
-    "express",
-    "react",
-    "vite"
-  ],
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
     "@types/node": "^25.5.0",
     "concurrently": "^9.2.1",

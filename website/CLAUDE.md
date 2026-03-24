@@ -15,7 +15,7 @@ Next.js 14 (App Router) + Sanity v3 website for Bodyspace Recovery Studio. Deplo
 ## Key Commands
 
 ```bash
-npm run dev      # Next.js dev server — http://localhost:3000
+npm run dev      # Next.js dev server — http://localhost:8080
 npm run sanity   # Sanity Studio dev — http://localhost:3333
 npm run build    # Production build (also type-checks)
 ```
