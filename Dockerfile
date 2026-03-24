@@ -24,13 +24,13 @@ RUN npm prune --prefix server --omit=dev
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/playwright:v1.58.2-noble AS runtime
 
-WORKDIR /app/skelly
+WORKDIR /app
 
 # Copy pre-built, pre-pruned server node_modules from builder (avoids recompiling native addons)
 COPY --from=builder /build/server/node_modules ./server/node_modules
 
 # Install Playwright's Chromium (system deps already present in base image)
-RUN cd /app/skelly/server && npx playwright install chromium
+RUN cd /app/server && npx playwright install chromium
 
 # Copy build artifacts and static config
 COPY --from=builder /build/server/dist ./server/dist
@@ -40,4 +40,4 @@ COPY server/config ./server/config
 ENV NODE_ENV=production
 EXPOSE 3000
 
-CMD ["node", "--enable-source-maps", "/app/skelly/server/dist/index.js"]
+CMD ["node", "--enable-source-maps", "/app/server/dist/index.js"]
