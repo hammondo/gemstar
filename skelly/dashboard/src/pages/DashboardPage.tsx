@@ -54,7 +54,7 @@ export default function DashboardPage() {
             <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                     label="Total campaigns"
-                    value={loading ? '—' : (counts?.totalCampaigns ?? 0)}
+                    value={loading ? '—' : allCampaigns.length}
                     icon={Megaphone}
                 />
                 <StatCard
@@ -69,8 +69,8 @@ export default function DashboardPage() {
                     icon={Activity}
                 />
                 <StatCard
-                    label="Posts published"
-                    value={loading ? '—' : (counts?.publishedPosts ?? 0)}
+                    label="Posts scheduled"
+                    value={loading ? '—' : (counts?.scheduledPosts ?? 0)}
                     icon={FileText}
                 />
             </div>

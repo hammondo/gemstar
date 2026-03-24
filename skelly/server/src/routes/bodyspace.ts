@@ -1,10 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import express, { Router } from 'express';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import multer from 'multer';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { FreshaWatcherAgent } from '../bodyspace/agents/fresha-watcher/agent.js';
 import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.js';
+import { LibraryGeneratorAgent } from '../bodyspace/agents/library-generator/agent.js';
 import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
 import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
@@ -15,6 +17,10 @@ import {
     getCampaignsByStatus,
     getLatestSignals,
     getLatestTrendsBrief,
+    getLibraryPosts,
+    markLibraryPostUsed,
+    reviveLibraryPost,
+    scheduleLibraryPost,
     updateTrendsBrief,
     getPostById,
     updatePostCopy,
@@ -26,6 +32,33 @@ import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
+
+// ── SSE helper ────────────────────────────────────────────────────────────────
+// Sets up an SSE response and returns a `send` helper + teardown.
+// Sends `: ping` comments every 25s so proxies don't close idle connections.
+function setupSSE(req: IncomingMessage, res: ServerResponse) {
+    req.setTimeout(0);
+    res.socket?.setTimeout(0);
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    });
+
+    let closed = false;
+    const keepalive = setInterval(() => { if (!closed) res.write(': ping\n\n'); }, 25_000);
+
+    req.on('close', () => { closed = true; clearInterval(keepalive); });
+
+    const send = (event: string, data: unknown) => {
+        if (!closed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const done = () => { clearInterval(keepalive); if (!closed) res.end(); };
+
+    return { send, done, isClosed: () => closed };
+}
 
 const bodyspaceRouter = Router();
 const upload = multer({
@@ -673,6 +706,141 @@ Return ONLY a JSON array of strings. Each string should be a full search instruc
         }
 
         res.json({ ok: true, terms });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// ── Library ───────────────────────────────────────────────────────────────
+
+bodyspaceRouter.get('/library', (req, res) => {
+    try {
+        const { serviceId, status, variantTag } = req.query as Record<string, string | undefined>;
+        const posts = getLibraryPosts({ serviceId, status, variantTag } as Parameters<typeof getLibraryPosts>[0]);
+        res.json({ ok: true, posts });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.post('/run/library', async (req, res) => {
+    try {
+        const { serviceIds, postsPerService } = req.body as {
+            serviceIds?: unknown;
+            postsPerService?: unknown;
+        };
+        if (!Array.isArray(serviceIds) || !serviceIds.every((s) => typeof s === 'string')) {
+            res.status(400).json({ ok: false, error: 'serviceIds must be an array of strings' });
+            return;
+        }
+        const count = typeof postsPerService === 'number' ? postsPerService : 6;
+
+        const agent = new LibraryGeneratorAgent();
+        const posts = await agent.run(serviceIds as string[], count);
+
+        // Fire image generation in background
+        const imageGen = new ImageGeneratorAgent();
+        void imageGen.runForPosts(posts).catch((err) => {
+            console.error('[Library] Image generation failed:', err);
+        });
+
+        res.json({ ok: true, posts });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.post('/run/library/stream', async (req, res) => {
+    const { send, done, isClosed } = setupSSE(req, res);
+
+    const { serviceIds, postsPerService } = req.body as { serviceIds?: unknown; postsPerService?: unknown };
+    if (!Array.isArray(serviceIds) || !serviceIds.every((s) => typeof s === 'string')) {
+        send('error', { message: 'serviceIds must be an array of strings' });
+        done();
+        return;
+    }
+
+    const count = typeof postsPerService === 'number' ? postsPerService : 6;
+    const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
+
+    try {
+        const agent = new LibraryGeneratorAgent();
+        const posts = await agent.run(serviceIds as string[], count, progress);
+
+        progress({ type: 'status', message: 'Post copy ready — generating images…' });
+
+        const imageGen = new ImageGeneratorAgent();
+        await imageGen.runForPosts(posts, progress);
+
+        send('complete', { ok: true });
+        done();
+    } catch (err) {
+        send('error', { message: String(err) });
+        done();
+    }
+});
+
+bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
+    const { send, done, isClosed } = setupSSE(req, res);
+
+    const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
+
+    try {
+        const allLibraryPosts = getLibraryPosts();
+        const needed = allLibraryPosts.filter((p) => p.imageStatus === 'needed' || p.imageStatus === 'generating');
+
+        if (needed.length === 0) {
+            send('complete', { ok: true });
+            done();
+            return;
+        }
+
+        progress({ type: 'status', message: `Found ${needed.length} post${needed.length !== 1 ? 's' : ''} needing images…` });
+
+        const imageGen = new ImageGeneratorAgent();
+        await imageGen.runForPosts(needed, progress);
+
+        send('complete', { ok: true });
+        done();
+    } catch (err) {
+        send('error', { message: String(err) });
+        done();
+    }
+});
+
+bodyspaceRouter.post('/library/posts/:id/used', (req, res) => {
+    try {
+        markLibraryPostUsed(req.params.id);
+        res.json({ ok: true });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.post('/library/posts/:id/revive', (req, res) => {
+    try {
+        const post = reviveLibraryPost(req.params.id);
+        if (!post) {
+            res.status(404).json({ ok: false, error: 'Post not found or not a library post' });
+            return;
+        }
+        res.json({ ok: true, post });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.patch('/library/posts/:id/schedule', (req, res) => {
+    try {
+        const postId = req.params.id;
+        const { scheduledFor } = req.body as { scheduledFor?: string };
+        if (!scheduledFor || typeof scheduledFor !== 'string') {
+            res.status(400).json({ ok: false, error: 'scheduledFor is required' });
+            return;
+        }
+        scheduleLibraryPost(postId, scheduledFor);
+        const post = getPostById(postId);
+        res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

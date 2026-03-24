@@ -11,6 +11,13 @@ import type { Platform, PostType, SocialPost } from '../../types.js';
 import { fetchWithLogging } from '../../utils/http.js';
 import { getAgentLogger } from '../../utils/logger.js';
 
+class RateLimitError extends Error {
+    constructor() {
+        super('Replicate rate limit (429)');
+        this.name = 'RateLimitError';
+    }
+}
+
 interface ReplicatePrediction {
     id: string;
     status: 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled';
@@ -60,7 +67,8 @@ export class ImageGeneratorAgent {
         let success = 0;
         let failed = 0;
 
-        for (const post of pending) {
+        for (let i = 0; i < pending.length; i++) {
+            const post = pending[i];
             try {
                 updatePostImage(post.id, '', 'generating');
                 const imageUrl = await this.generateForPost(post, campaignId, imageDir);
@@ -71,6 +79,16 @@ export class ImageGeneratorAgent {
                     'Image generated'
                 );
             } catch (err) {
+                if (err instanceof RateLimitError) {
+                    this.log.warn(
+                        { campaignId, postId: post.id, remaining: pending.length - i },
+                        'Rate limited by Replicate — retrying in 60s'
+                    );
+                    updatePostImage(post.id, '', 'needed');
+                    await sleep(60_000);
+                    i--; // retry this post
+                    continue;
+                }
                 failed++;
                 updatePostImage(post.id, '', 'needed');
                 this.log.error({ campaignId, postId: post.id, error: String(err) }, 'Image generation failed');
@@ -78,6 +96,61 @@ export class ImageGeneratorAgent {
         }
 
         this.log.info({ campaignId, success, failed }, 'Image generation complete');
+    }
+
+    // ── Library post batch generation ───────────────────────────────────────
+
+    async runForPosts(
+        posts: SocialPost[],
+        onProgress?: (p: { type: string; message: string }) => void,
+    ): Promise<void> {
+        const pending = posts.filter(
+            (p) => !p.imageUrl || p.imageStatus === 'needed' || p.imageStatus === 'generating'
+        );
+
+        if (pending.length === 0) {
+            this.log.info('No library posts need images');
+            return;
+        }
+
+        this.log.info({ count: pending.length }, 'Starting library image generation');
+
+        let success = 0;
+        let failed = 0;
+
+        for (let i = 0; i < pending.length; i++) {
+            const post = pending[i];
+            // Library posts store images under 'library/{postId}/' rather than a campaignId folder
+            const imageDir = resolve(settings.dataDir, 'images', 'library', post.id);
+            mkdirSync(imageDir, { recursive: true });
+
+            try {
+                updatePostImage(post.id, '', 'generating');
+                onProgress?.({ type: 'status', message: `Generating image ${i + 1} of ${pending.length}…` });
+                const imageUrl = await this.generateForPost(post, `library/${post.id}`, imageDir);
+                updatePostImage(post.id, imageUrl, 'draft');
+                success++;
+                onProgress?.({ type: 'status', message: `✓ Image ${success} of ${pending.length} done` });
+                this.log.info({ postId: post.id, serviceId: post.serviceId }, 'Library image generated');
+            } catch (err) {
+                if (err instanceof RateLimitError) {
+                    this.log.warn(
+                        { postId: post.id, remaining: pending.length - i },
+                        'Rate limited by Replicate — retrying in 20s'
+                    );
+                    onProgress?.({ type: 'status', message: 'Rate limited — waiting before retrying…' });
+                    updatePostImage(post.id, '', 'needed');
+                    await sleep(20_000);
+                    i--; // retry this post
+                    continue;
+                }
+                failed++;
+                updatePostImage(post.id, '', 'needed');
+                this.log.error({ postId: post.id, error: String(err) }, 'Library image generation failed');
+            }
+        }
+
+        this.log.info({ success, failed }, 'Library image generation complete');
     }
 
     // ── Single-post regeneration (called from dashboard) ─────────────────────
@@ -166,6 +239,7 @@ export class ImageGeneratorAgent {
             { system: 'replicate', operation: 'create_prediction', campaignId, postId: post.id }
         );
 
+        if (res.status === 429) throw new RateLimitError();
         if (!res.ok) {
             const text = await res.text();
             throw new Error(`Replicate API ${res.status}: ${text}`);

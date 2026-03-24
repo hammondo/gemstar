@@ -20,7 +20,7 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: skelly/server/package-lock.json
-      - run: npm ci && npm --prefix server ci && npm --prefix dashboard ci
+      - run: npm ci
       - run: npm run lint
 
   check-skelly-dashboard:

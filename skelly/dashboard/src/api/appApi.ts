@@ -1,4 +1,4 @@
-import { postForm, streamSSE, streamSSEPost, type SSECallbacks } from './http';
+import { postForm, fetchJson, postJson, patchJson, streamSSE, streamSSEPost, type SSECallbacks } from './http';
 import { client } from './client';
 import type { components } from './schema.d.ts';
 export type { SSECallbacks };
@@ -6,15 +6,13 @@ export type { SSECallbacks };
 // ── Generated types ────────────────────────────────────────────────────────
 
 export type Campaign = components['schemas']['Campaign'];
-export type SocialPost = components['schemas']['SocialPost'];
 export type TrendsBrief = components['schemas']['TrendsBrief'];
 export type ServiceAvailability = components['schemas']['ServiceAvailability'];
 export type AuthUser = components['schemas']['AuthUser'];
 export type ServiceInfo = components['schemas']['ServiceInfo'];
 export type BlogSync = components['schemas']['BlogSync'];
-export type CampaignStatus = components['schemas']['CampaignStatus'];
-export type PostStatus = components['schemas']['PostStatus'];
-export type ImageStatus = components['schemas']['ImageStatus'];
+export type AvailabilitySignal = components['schemas']['AvailabilitySignal'];
+export type FbInsightRow = { [key: string]: string | number };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -27,6 +25,35 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+
+export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
+export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'used';
+export type PostSource = 'campaign' | 'library';
+export type VariantTag = 'promotional' | 'educational' | 'seasonal' | 'community';
+export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
+
+export interface SocialPost {
+    id: string;
+    campaignId?: string;
+    source?: PostSource;
+    serviceId?: string;
+    variantTag?: VariantTag;
+    platform: 'instagram' | 'facebook';
+    postType: 'feed' | 'story' | 'reel';
+    copy: string;
+    ownerEdit?: string;
+    status: PostStatus;
+    imageUrl?: string;
+    imageStatus?: ImageStatus;
+    imageDirection?: string;
+    hashtags: string[];
+    callToAction?: string;
+    contentPillar?: string;
+    rejectionReason?: string;
+    scheduledFor?: string;
+    publishedAt?: string;
+    createdAt: string;
+}
 
 export async function getMe() {
     return unwrap(await client.GET('/api/auth/me'));
@@ -258,4 +285,48 @@ export async function scheduleCampaigns() {
 
 export async function importFreshaCsv(csvContent: string, filename: string) {
     return unwrap(await client.POST('/api/bodyspace/fresha/import', { body: { csvContent, filename } }));
+}
+
+// ── Library ───────────────────────────────────────────────────────────────────
+
+export function getLibraryPosts(filters?: {
+    serviceId?: string;
+    status?: PostStatus;
+    variantTag?: VariantTag;
+}): Promise<{ ok: boolean; posts: SocialPost[] }> {
+    const params = new URLSearchParams();
+    if (filters?.serviceId) params.set('serviceId', filters.serviceId);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.variantTag) params.set('variantTag', filters.variantTag);
+    const qs = params.size ? `?${params.toString()}` : '';
+    return fetchJson(`/api/bodyspace/library${qs}`);
+}
+
+export interface LibraryProgress {
+    type: string;
+    message: string;
+}
+
+export function streamGenerateLibraryPosts(
+    serviceIds: string[],
+    postsPerService: number,
+    callbacks: SSECallbacks<LibraryProgress>,
+): () => void {
+    return streamSSEPost('/api/bodyspace/run/library/stream', { serviceIds, postsPerService }, callbacks);
+}
+
+export function streamGenerateLibraryImages(callbacks: SSECallbacks<LibraryProgress>): () => void {
+    return streamSSEPost('/api/bodyspace/run/library/images/stream', {}, callbacks);
+}
+
+export function scheduleLibraryPost(postId: string, scheduledFor: string): Promise<{ ok: boolean; post: SocialPost }> {
+    return patchJson(`/api/bodyspace/library/posts/${postId}/schedule`, { scheduledFor });
+}
+
+export function markLibraryPostUsed(postId: string): Promise<{ ok: boolean }> {
+    return postJson(`/api/bodyspace/library/posts/${postId}/used`);
+}
+
+export function reviveLibraryPost(postId: string): Promise<{ ok: boolean; post: SocialPost }> {
+    return postJson(`/api/bodyspace/library/posts/${postId}/revive`);
 }

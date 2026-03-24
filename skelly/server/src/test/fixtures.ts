@@ -15,6 +15,7 @@ export const POST: SocialPost = {
     status: 'pending_review',
     imageStatus: 'needed',
     createdAt: '2025-06-01T00:00:00.000Z',
+    source: 'library',
 };
 
 export const POST_WITH_IMAGE: SocialPost = {

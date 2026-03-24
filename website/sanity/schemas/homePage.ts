@@ -4,7 +4,6 @@ export default defineType({
   name: 'homePage',
   title: 'Home Page',
   type: 'document',
-  __experimental_actions: ['update', 'publish'],
   fields: [
     defineField({
       name: 'hero',

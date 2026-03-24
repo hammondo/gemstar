@@ -2,7 +2,7 @@ import { Check, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    type AvailabilitySignal,
+    type ServiceAvailability,
     type Campaign,
     type MonitorProgress,
     type ServiceInfo,
@@ -21,6 +21,7 @@ import {
     updateTrendsBrief,
 } from '../api/appApi';
 import PageHeader from '../components/PageHeader';
+import ServiceSelector from '../components/ServiceSelector';
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -546,7 +547,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
     const [services, setServices] = useState<ServiceInfo[]>([]);
     const [servicesLoading, setServicesLoading] = useState(true);
     const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
-    const [signals, setSignals] = useState<Record<string, AvailabilitySignal>>({});
+    const [signals, setSignals] = useState<Record<string, ServiceAvailability>>({});
     const [refreshing, setRefreshing] = useState(false);
     const [state, setState] = useState<RunState>('idle');
     const [error, setError] = useState<string | null>(null);
@@ -613,27 +614,6 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
         }
     }
 
-    function signalBadge(id: string) {
-        const sig = signals[id];
-        if (!sig) return null;
-        const color =
-            sig.signal === 'push' ? 'bg-green-400' :
-            sig.signal === 'pause' ? 'bg-red-400' :
-            'bg-warm-300';
-        return (
-            <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-normal opacity-70">
-                <span className={`inline-block h-1.5 w-1.5 rounded-full ${color}`} />
-                {sig.availableSlots}
-            </span>
-        );
-    }
-
-    // Group services by category
-    const byCategory = services.reduce<Record<string, ServiceInfo[]>>((acc, svc) => {
-        (acc[svc.category] ??= []).push(svc);
-        return acc;
-    }, {});
-
     return (
         <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
             <p className="text-muted mb-1 text-xs font-semibold tracking-wide uppercase">Step 2 · Campaign Plan</p>
@@ -649,77 +629,33 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
 
             {/* Service selector */}
             <div className="mb-5">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                    <label className="text-muted text-xs font-medium">
-                        Services to promote <span className="font-normal">(leave empty to use Fresha booking signals)</span>
-                    </label>
-                    <div className="flex items-center gap-2 shrink-0">
-                        <button
-                            onClick={() => {
-                                const pushIds = Object.values(signals)
-                                    .filter((s) => s.signal === 'push')
-                                    .map((s) => s.serviceId);
-                                setSelectedServices(new Set(pushIds));
-                            }}
-                            disabled={state === 'running' || servicesLoading}
-                            className="border-warm-200 text-muted rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-40"
-                        >
-                            Select push
-                        </button>
-                        <button
-                            onClick={() => setSelectedServices(new Set())}
-                            disabled={state === 'running' || selectedServices.size === 0}
-                            className="border-warm-200 text-muted rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-red-300 hover:text-red-600 disabled:opacity-40"
-                        >
-                            Clear
-                        </button>
-                        <button
-                            onClick={() => void handleRefreshFresha()}
-                            disabled={refreshing || state === 'running'}
-                            className="border-warm-200 text-muted flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-40"
-                        >
-                            {refreshing ? (
-                                <><span className="h-2.5 w-2.5 animate-spin rounded-full border border-teal-400 border-t-transparent" />Refreshing…</>
-                            ) : (
-                                'Refresh Fresha'
-                            )}
-                        </button>
-                    </div>
-                </div>
-                {servicesLoading ? (
-                    <div className="bg-warm-100 h-32 w-full animate-pulse rounded-xl" />
-                ) : (
-                    <div className="border-warm-200 rounded-xl border divide-y divide-warm-100">
-                        {Object.entries(byCategory).map(([category, svcs]) => (
-                            <div key={category} className="px-4 py-3">
-                                <p className="text-muted mb-2 text-[11px] font-semibold uppercase tracking-wide">{category}</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {svcs.map((svc) => {
-                                        const checked = selectedServices.has(svc.id);
-                                        return (
-                                            <button
-                                                key={svc.id}
-                                                onClick={() => toggleService(svc.id)}
-                                                disabled={state === 'running'}
-                                                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition disabled:opacity-50 ${
-                                                    checked
-                                                        ? 'border-teal-400 bg-teal-50 text-teal-700'
-                                                        : signals[svc.id]?.signal === 'pause'
-                                                          ? 'border-warm-200 bg-warm-50 text-muted opacity-60 hover:border-warm-300'
-                                                          : 'border-warm-200 bg-white text-charcoal hover:border-teal-300'
-                                                }`}
-                                            >
-                                                {checked && <span className="mr-1">✓</span>}
-                                                {svc.name}
-                                                {signalBadge(svc.id)}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                <ServiceSelector
+                    services={services}
+                    selected={selectedServices}
+                    signals={signals}
+                    loading={servicesLoading}
+                    disabled={state === 'running'}
+                    hint="leave empty to use Fresha booking signals"
+                    showFresha
+                    refreshing={refreshing}
+                    onToggle={toggleService}
+                    onToggleGroup={(ids, allSelected) => {
+                        setSelectedServices((prev) => {
+                            const next = new Set(prev);
+                            if (allSelected) ids.forEach((id) => next.delete(id));
+                            else ids.forEach((id) => next.add(id));
+                            return next;
+                        });
+                    }}
+                    onSelectPush={() => {
+                        const pushIds = Object.values(signals)
+                            .filter((s) => s.signal === 'push')
+                            .map((s) => s.serviceId);
+                        setSelectedServices(new Set(pushIds));
+                    }}
+                    onClear={() => setSelectedServices(new Set())}
+                    onRefreshFresha={() => void handleRefreshFresha()}
+                />
             </div>
 
             <div className="mb-5">
@@ -746,7 +682,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
             {state === 'done' && campaign && (
                 <div className="mb-5 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
                     <p className="text-xs font-semibold text-teal-700">✓ Campaign generated</p>
-                    <p className="text-charcoal mt-0.5 text-sm font-semibold">{campaign.title}</p>
+                    <p className="text-charcoal mt-0.5 text-sm font-semibold">{campaign.name}</p>
                     {campaign.description && <p className="text-muted mt-1 text-xs">{campaign.description}</p>}
                 </div>
             )}

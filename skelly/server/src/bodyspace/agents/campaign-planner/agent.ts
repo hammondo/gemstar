@@ -286,6 +286,7 @@ Output ONLY valid JSON, no preamble, no markdown fences.`,
         const posts: SocialPost[] = data.posts.map((p: GeneratedPost) => ({
             id: randomUUID(),
             campaignId: '', // filled by saveCampaign
+            source: 'campaign' as const,
             platform: p.platform,
             postType: p.postType,
             contentPillar: p.contentPillar,
