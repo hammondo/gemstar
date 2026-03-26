@@ -267,6 +267,10 @@ export async function runFreshaWatcher() {
     return unwrap(await client.POST('/api/bodyspace/run/fresha'));
 }
 
+export async function runMonitor() {
+    return unwrap(await client.POST('/api/bodyspace/run/monitor'));
+}
+
 export function streamMonitor(callbacks: SSECallbacks<MonitorProgress>): () => void {
     return streamSSE('/api/bodyspace/run/monitor/stream', callbacks);
 }

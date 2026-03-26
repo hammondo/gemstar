@@ -1,6 +1,6 @@
 # Todo
 
-- [ ] Replace "Login with Microsoft" with the styling / logo that is normally shown for ms login.
+- [x] Replace "Login with Microsoft" with the styling / logo that is normally shown for ms login.
 
 - [ ] Add user roles
 
@@ -12,7 +12,7 @@
 
 - [ ] instead of showing available booking slots, show the number of bookings in the next 7 day period.
 
-- [ ] generating library posts can take a while.  Let's add sse progress to the generating posts step on the post library page like we do for campaign planning
+- [?] generating library posts can take a while.  Let's add sse progress to the generating posts step on the post library page like we do for campaign planning
 
 - [x] The back button on post details is hard-coded to /posts even if launched from library.  It should navigate back in the router to where-ever the page was launched from.
 

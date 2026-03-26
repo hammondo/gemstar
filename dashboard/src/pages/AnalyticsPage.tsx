@@ -133,7 +133,7 @@ const FB_CHART_GROUPS = [
     },
     {
         title: 'Follows (28 days)',
-        metrics: ['page_follows', 'page_daily_follows'],
+        metrics: ['page_daily_follows'],
     },
 ];
 

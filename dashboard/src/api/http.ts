@@ -127,7 +127,7 @@ export function streamSSEPost<T>(path: string, body: unknown, callbacks: SSECall
 }
 
 export function streamSSE<T>(path: string, callbacks: SSECallbacks<T>): () => void {
-    const source = new EventSource(`${apiBaseUrl}${path}`);
+    const source = new EventSource(`${apiBaseUrl}${path}`, { withCredentials: true });
 
     source.addEventListener('progress', (event) => {
         callbacks.onProgress?.(JSON.parse((event as MessageEvent).data) as T);
