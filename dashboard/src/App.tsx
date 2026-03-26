@@ -64,8 +64,15 @@ export default function App() {
                 <p className="text-sm text-white/50">Sign in to access the dashboard</p>
                 <a
                     href={`${config.apiBaseUrl}/api/auth/login`}
-                    className="rounded-xl bg-teal-400 px-6 py-2.5 text-sm font-bold text-charcoal transition hover:brightness-110"
+                    className="flex items-center gap-3 rounded bg-white px-3 py-2.5 text-sm font-semibold text-[#5e5e5e] shadow-sm transition hover:bg-[#f3f3f3] active:bg-[#ebebeb]"
+                    style={{ fontFamily: "'Segoe UI', sans-serif" }}
                 >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21">
+                        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                    </svg>
                     Sign in with Microsoft
                 </a>
             </div>

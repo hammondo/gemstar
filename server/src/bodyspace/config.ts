@@ -36,8 +36,8 @@ export const settings = {
     ownerPhone: process.env.OWNER_PHONE ?? '',
 
     // Dashboard
-    dashboardPort: envInt('DASHBOARD_PORT', 5173),
-    dashboardBaseUrl: process.env.DASHBOARD_BASE_URL ?? 'http://localhost:5173',
+    dashboardPort: envInt('DASHBOARD_PORT', 5174),
+    dashboardBaseUrl: process.env.DASHBOARD_BASE_URL ?? 'http://localhost:5174',
     dashboardSessionSecret: process.env.DASHBOARD_SESSION_SECRET ?? 'dev-secret',
     dashboardPassword: process.env.DASHBOARD_PASSWORD ?? 'bodyspace2025',
 
