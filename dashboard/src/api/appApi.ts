@@ -1,5 +1,5 @@
-import { postForm, fetchJson, postJson, patchJson, streamSSE, streamSSEPost, type SSECallbacks } from './http';
 import { client } from './client';
+import { fetchJson, patchJson, postForm, postJson, streamSSE, streamSSEPost, type SSECallbacks } from './http';
 import type { components } from './schema.d.ts';
 export type { SSECallbacks };
 
@@ -65,9 +65,7 @@ export async function logout() {
 
 // ── Status ────────────────────────────────────────────────────────────────────
 
-export type BodyspaceStatus = NonNullable<
-    Awaited<ReturnType<typeof getBodyspaceStatus>>
->;
+export type BodyspaceStatus = NonNullable<Awaited<ReturnType<typeof getBodyspaceStatus>>>;
 
 export async function getBodyspaceStatus() {
     return unwrap(await client.GET('/api/bodyspace/status'));
@@ -84,17 +82,21 @@ export async function getCampaign(id: string) {
 }
 
 export async function approveCampaign(id: string, notes?: string) {
-    return unwrap(await client.POST('/api/bodyspace/campaigns/{id}/approve', {
-        params: { path: { id } },
-        body: { notes },
-    }));
+    return unwrap(
+        await client.POST('/api/bodyspace/campaigns/{id}/approve', {
+            params: { path: { id } },
+            body: { notes },
+        })
+    );
 }
 
 export async function rejectCampaign(id: string, reason?: string) {
-    return unwrap(await client.POST('/api/bodyspace/campaigns/{id}/reject', {
-        params: { path: { id } },
-        body: { reason },
-    }));
+    return unwrap(
+        await client.POST('/api/bodyspace/campaigns/{id}/reject', {
+            params: { path: { id } },
+            body: { reason },
+        })
+    );
 }
 
 // ── Posts ─────────────────────────────────────────────────────────────────────
@@ -104,32 +106,40 @@ export async function getPost(id: string) {
 }
 
 export async function updatePost(id: string, copy: string, scheduledFor?: string | null) {
-    return unwrap(await client.PATCH('/api/bodyspace/posts/{id}', {
-        params: { path: { id } },
-        body: { copy, scheduledFor },
-    }));
+    return unwrap(
+        await client.PATCH('/api/bodyspace/posts/{id}', {
+            params: { path: { id } },
+            body: { copy, scheduledFor },
+        })
+    );
 }
 
 export async function approvePost(id: string, copy?: string) {
-    return unwrap(await client.POST('/api/bodyspace/posts/{id}/approve', {
-        params: { path: { id } },
-        body: { copy },
-    }));
+    return unwrap(
+        await client.POST('/api/bodyspace/posts/{id}/approve', {
+            params: { path: { id } },
+            body: { copy },
+        })
+    );
 }
 
 export async function rejectPost(id: string, reason?: string) {
-    return unwrap(await client.POST('/api/bodyspace/posts/{id}/reject', {
-        params: { path: { id } },
-        body: { reason },
-    }));
+    return unwrap(
+        await client.POST('/api/bodyspace/posts/{id}/reject', {
+            params: { path: { id } },
+            body: { reason },
+        })
+    );
 }
 
 // ── Image management ──────────────────────────────────────────────────────────
 
 export async function approvePostImage(postId: string) {
-    return unwrap(await client.POST('/api/bodyspace/posts/{id}/image/approve', {
-        params: { path: { id: postId } },
-    }));
+    return unwrap(
+        await client.POST('/api/bodyspace/posts/{id}/image/approve', {
+            params: { path: { id: postId } },
+        })
+    );
 }
 
 export async function uploadPostImage(postId: string, file: File) {
@@ -141,7 +151,7 @@ export async function uploadPostImage(postId: string, file: File) {
 export async function regeneratePostImage(
     postId: string,
     campaignId: string,
-    opts: { feedback?: string; referenceImageUrl?: string } = {},
+    opts: { feedback?: string; referenceImageUrl?: string } = {}
 ) {
     const form = new FormData();
     form.append('campaignId', campaignId);
@@ -153,7 +163,7 @@ export async function regeneratePostImage(
 export async function regeneratePostImageWithFile(
     postId: string,
     campaignId: string,
-    opts: { feedback?: string; file?: File } = {},
+    opts: { feedback?: string; file?: File } = {}
 ) {
     const form = new FormData();
     form.append('campaignId', campaignId);
@@ -176,12 +186,14 @@ export async function updateTrendsBrief(
         seasonalFactors: string;
         recommendedFocus: string;
         opportunities: string;
-    },
+    }
 ) {
-    return unwrap(await client.PATCH('/api/bodyspace/trends/{id}', {
-        params: { path: { id } },
-        body: patch,
-    }));
+    return unwrap(
+        await client.PATCH('/api/bodyspace/trends/{id}', {
+            params: { path: { id } },
+            body: patch,
+        })
+    );
 }
 
 // ── Signals ───────────────────────────────────────────────────────────────────
@@ -198,9 +210,7 @@ export async function getServices() {
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
-export type MetaAnalyticsResult = NonNullable<
-    Awaited<ReturnType<typeof getMetaAnalytics>>
->;
+export type MetaAnalyticsResult = NonNullable<Awaited<ReturnType<typeof getMetaAnalytics>>>;
 
 export async function getMetaAnalytics() {
     return unwrap(await client.GET('/api/bodyspace/analytics/meta'));
@@ -267,10 +277,6 @@ export async function runFreshaWatcher() {
     return unwrap(await client.POST('/api/bodyspace/run/fresha'));
 }
 
-export async function runMonitor() {
-    return unwrap(await client.POST('/api/bodyspace/run/monitor'));
-}
-
 export function streamMonitor(callbacks: SSECallbacks<MonitorProgress>): () => void {
     return streamSSE('/api/bodyspace/run/monitor/stream', callbacks);
 }
@@ -314,7 +320,7 @@ export interface LibraryProgress {
 export function streamGenerateLibraryPosts(
     serviceIds: string[],
     postsPerService: number,
-    callbacks: SSECallbacks<LibraryProgress>,
+    callbacks: SSECallbacks<LibraryProgress>
 ): () => void {
     return streamSSEPost('/api/bodyspace/run/library/stream', { serviceIds, postsPerService }, callbacks);
 }
