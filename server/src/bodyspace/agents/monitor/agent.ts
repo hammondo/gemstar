@@ -147,7 +147,7 @@ Return ONLY valid JSON matching this exact schema:
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
             system: SYSTEM_PROMPT,
-            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as never,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] as never,
             messages: [{ role: 'user', content: prompt }],
         });
 
@@ -188,7 +188,7 @@ Return ONLY valid JSON matching this exact schema:
             model: 'claude-sonnet-4-20250514',
             max_tokens: 4000,
             system: SYSTEM_PROMPT,
-            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as never,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] as never,
             messages: [{ role: 'user', content: prompt }],
         });
 
