@@ -19,6 +19,7 @@ import {
     getLatestTrendsBrief,
     getLibraryPosts,
     markLibraryPostUsed,
+    queryAuditLogs,
     reviveLibraryPost,
     scheduleLibraryPost,
     updateTrendsBrief,
@@ -27,6 +28,7 @@ import {
     updatePostImage,
     updatePostSanitySync,
 } from '../bodyspace/db.js';
+import { failAudit, finishAudit, startAudit } from '../bodyspace/audit.js';
 import { clearMetaCache, getMetaAnalytics } from '../bodyspace/services/meta-analytics.js';
 import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
@@ -226,18 +228,18 @@ bodyspaceRouter.get('/campaigns/:id', (req, res) => {
     res.json({ ok: true, campaign });
 });
 
-bodyspaceRouter.post('/run/fresha', async (_req, res) => {
+bodyspaceRouter.post('/run/fresha', async (req, res) => {
     try {
-        await orchestrator.runFreshaWatcher();
+        await orchestrator.runFreshaWatcher(req.session.user, 'api');
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-bodyspaceRouter.post('/run/monitor', async (_req, res) => {
+bodyspaceRouter.post('/run/monitor', async (req, res) => {
     try {
-        await orchestrator.runMonitor();
+        await orchestrator.runMonitor(req.session.user, 'api');
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -260,19 +262,22 @@ bodyspaceRouter.get('/run/monitor/stream', (req, res) => {
         closed = true;
     });
 
+    const auditId = startAudit('monitor', 'api', req.session.user);
     const agent = new MonitorAgent();
     agent
         .runStreaming((progress) => {
             if (closed) return;
             send('progress', progress);
         })
-        .then(() => {
+        .then((brief) => {
+            finishAudit(auditId, { briefId: brief.id, confidence: brief.confidence });
             if (!closed) {
                 send('complete', { ok: true });
                 res.end();
             }
         })
         .catch((err) => {
+            failAudit(auditId, err);
             if (!closed) {
                 send('error', { message: String(err) });
                 res.end();
@@ -283,7 +288,7 @@ bodyspaceRouter.get('/run/monitor/stream', (req, res) => {
 bodyspaceRouter.post('/run/campaign', async (req, res) => {
     try {
         const ownerBrief = typeof req.body?.ownerBrief === 'string' ? req.body.ownerBrief : undefined;
-        await orchestrator.runCampaignPlanner(ownerBrief);
+        await orchestrator.runCampaignPlanner(ownerBrief, req.session.user, 'api');
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -293,7 +298,7 @@ bodyspaceRouter.post('/run/campaign', async (req, res) => {
 bodyspaceRouter.post('/run/all', async (req, res) => {
     try {
         const ownerBrief = typeof req.body?.ownerBrief === 'string' ? req.body.ownerBrief : undefined;
-        await orchestrator.runAll({ ownerBrief });
+        await orchestrator.runAll({ ownerBrief, user: req.session.user, trigger: 'api' });
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -323,8 +328,17 @@ bodyspaceRouter.post('/fresha/import', async (req, res) => {
         const savePath = resolve(exportsDir, safeName);
         writeFileSync(savePath, csvContent, 'utf8');
 
-        const watcher = new FreshaWatcherAgent();
-        const signals = await watcher.run();
+        const auditId = startAudit('fresha-watcher', 'api', req.session.user, { filename: safeName });
+        let signals;
+        try {
+            const watcher = new FreshaWatcherAgent();
+            signals = await watcher.run();
+            const pushCount = Object.values(signals).filter((v) => v.signal === 'push').length;
+            finishAudit(auditId, { signalCount: Object.keys(signals).length, pushCount });
+        } catch (err) {
+            failAudit(auditId, err);
+            throw err;
+        }
 
         res.json({ ok: true, filename: safeName, signals });
     } catch (err) {
@@ -397,8 +411,15 @@ bodyspaceRouter.post('/campaigns/:id/approve', async (req, res) => {
         const approval = new ApprovalWorkflow();
         const campaign = approval.approveCampaign(campaignId, notes);
 
-        const scheduler = new SchedulerAgent();
-        await scheduler.run(campaignId);
+        const auditId = startAudit('scheduler', 'api', req.session.user, { campaignId });
+        try {
+            const scheduler = new SchedulerAgent();
+            await scheduler.run(campaignId);
+            finishAudit(auditId, { campaignId });
+        } catch (err) {
+            failAudit(auditId, err);
+            throw err;
+        }
 
         res.json({ ok: true, campaign });
     } catch (err) {
@@ -422,9 +443,15 @@ bodyspaceRouter.post('/campaigns/:id/reject', (req, res) => {
 bodyspaceRouter.post('/schedule', async (req, res) => {
     try {
         const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
-        const scheduler = new SchedulerAgent();
-        await scheduler.run(campaignId);
-
+        const auditId = startAudit('scheduler', 'api', req.session.user, campaignId ? { campaignId } : undefined);
+        try {
+            const scheduler = new SchedulerAgent();
+            await scheduler.run(campaignId);
+            finishAudit(auditId, campaignId ? { campaignId } : undefined);
+        } catch (err) {
+            failAudit(auditId, err);
+            throw err;
+        }
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -735,8 +762,16 @@ bodyspaceRouter.post('/run/library', async (req, res) => {
         }
         const count = typeof postsPerService === 'number' ? postsPerService : 6;
 
-        const agent = new LibraryGeneratorAgent();
-        const posts = await agent.run(serviceIds as string[], count);
+        const auditId = startAudit('library-generator', 'api', req.session.user, { serviceIds, postsPerService: count });
+        let posts;
+        try {
+            const agent = new LibraryGeneratorAgent();
+            posts = await agent.run(serviceIds as string[], count);
+            finishAudit(auditId, { postsGenerated: posts.length });
+        } catch (err) {
+            failAudit(auditId, err);
+            throw err;
+        }
 
         // Fire image generation in background
         const imageGen = new ImageGeneratorAgent();
@@ -763,6 +798,7 @@ bodyspaceRouter.post('/run/library/stream', async (req, res) => {
     const count = typeof postsPerService === 'number' ? postsPerService : 6;
     const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
 
+    const auditId = startAudit('library-generator', 'api', req.session.user, { serviceIds, postsPerService: count });
     try {
         const agent = new LibraryGeneratorAgent();
         const posts = await agent.run(serviceIds as string[], count, progress);
@@ -772,9 +808,11 @@ bodyspaceRouter.post('/run/library/stream', async (req, res) => {
         const imageGen = new ImageGeneratorAgent();
         await imageGen.runForPosts(posts, progress);
 
+        finishAudit(auditId, { postsGenerated: posts.length });
         send('complete', { ok: true });
         done();
     } catch (err) {
+        failAudit(auditId, err);
         send('error', { message: String(err) });
         done();
     }
@@ -854,12 +892,35 @@ bodyspaceRouter.post('/run/image-generator', async (req, res) => {
             res.status(400).json({ ok: false, error: 'campaignId is required' });
             return;
         }
+        const auditId = startAudit('image-generator', 'api', req.session.user, { campaignId });
         const agent = new ImageGeneratorAgent();
         // Run async and return immediately — generation takes time
-        void agent.run(campaignId).catch((err) => {
+        void agent.run(campaignId).then(() => {
+            finishAudit(auditId, { campaignId });
+        }).catch((err) => {
+            failAudit(auditId, err);
             console.error('[Route] Image generator error:', err);
         });
         res.json({ ok: true, message: 'Image generation started', campaignId });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+
+bodyspaceRouter.get('/audit', (req, res) => {
+    try {
+        const { agentName, status, trigger, search, limit, offset } = req.query as Record<string, string | undefined>;
+        const result = queryAuditLogs({
+            agentName: agentName || undefined,
+            status: status || undefined,
+            trigger: trigger || undefined,
+            search: search || undefined,
+            limit: limit ? parseInt(limit, 10) : undefined,
+            offset: offset ? parseInt(offset, 10) : undefined,
+        });
+        res.json({ ok: true, ...result });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

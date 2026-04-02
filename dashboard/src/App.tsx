@@ -6,6 +6,7 @@ import logo from './assets/logo.png';
 import AppLayout from './layouts/AppLayout';
 import AgentsPage from './pages/AgentsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import AuditLogPage from './pages/AuditLogPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
 import NewCampaignWizardPage from './pages/NewCampaignWizardPage';
@@ -93,6 +94,7 @@ export default function App() {
                 <Route path="signals" element={<SignalsPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="audit" element={<AuditLogPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>
