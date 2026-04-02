@@ -4,6 +4,7 @@ import { makeApp } from './helpers.js';
 import { CAMPAIGN } from './fixtures.js';
 
 vi.mock('../bodyspace/db.js', () => ({
+    getAllCampaigns: vi.fn(),
     getCampaignById: vi.fn(),
     getCampaignsByStatus: vi.fn(),
     updateCampaignStatus: vi.fn(),
@@ -20,11 +21,12 @@ vi.mock('../bodyspace/db.js', () => ({
     saveAvailabilitySignals: vi.fn(),
 }));
 
-import { getCampaignById, getCampaignsByStatus } from '../bodyspace/db.js';
+import { getAllCampaigns, getCampaignById, getCampaignsByStatus } from '../bodyspace/db.js';
 
 const app = makeApp();
 
 beforeEach(() => {
+    vi.mocked(getAllCampaigns).mockReturnValue([CAMPAIGN]);
     vi.mocked(getCampaignsByStatus).mockReturnValue([CAMPAIGN]);
     vi.mocked(getCampaignById).mockReturnValue(CAMPAIGN);
 });

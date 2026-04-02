@@ -275,6 +275,7 @@ function runMigrations(db: Database.Database): void {
 // ─── Typed helpers ────────────────────────────────────────────────────────
 
 import { randomUUID } from 'crypto';
+import { CAMPAIGN_STATUSES } from './types.js';
 import type {
     Campaign,
     CampaignStatus,
@@ -514,6 +515,10 @@ export function getCampaignsByStatus(status: CampaignStatus): Campaign[] {
             .all(row.id as string) as Array<Record<string, unknown>>;
         return rowToCampaign(row, posts);
     });
+}
+
+export function getAllCampaigns(): Campaign[] {
+    return CAMPAIGN_STATUSES.flatMap((status) => getCampaignsByStatus(status));
 }
 
 export function updateCampaignStatus(id: string, status: CampaignStatus, extra: Partial<Campaign> = {}): void {

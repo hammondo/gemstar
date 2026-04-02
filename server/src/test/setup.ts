@@ -99,6 +99,14 @@ vi.mock('../bodyspace/services/meta-analytics.js', () => ({
     clearMetaCache: vi.fn(),
 }));
 
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+vi.mock('../bodyspace/audit.js', () => ({
+    startAudit: vi.fn().mockReturnValue('audit-id-mock'),
+    finishAudit: vi.fn(),
+    failAudit: vi.fn(),
+}));
+
 // ─── Third-party ──────────────────────────────────────────────────────────────
 
 vi.mock('@azure/msal-node', () => ({

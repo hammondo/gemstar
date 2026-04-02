@@ -4,6 +4,7 @@ import { makeApp } from './helpers.js';
 import { CAMPAIGN, POST, POST_WITH_IMAGE } from './fixtures.js';
 
 vi.mock('../bodyspace/db.js', () => ({
+    getAllCampaigns: vi.fn(),
     getCampaignById: vi.fn(),
     getCampaignsByStatus: vi.fn().mockReturnValue([]),
     getPostById: vi.fn(),
@@ -20,13 +21,13 @@ vi.mock('../bodyspace/db.js', () => ({
     saveAvailabilitySignals: vi.fn(),
 }));
 
-import { getCampaignsByStatus, getPostById } from '../bodyspace/db.js';
+import { getAllCampaigns, getCampaignsByStatus, getPostById } from '../bodyspace/db.js';
 
 const app = makeApp();
 
 beforeEach(() => {
     vi.mocked(getPostById).mockReturnValue(POST);
-    // Make findCampaignByPostId work: getAllCampaigns calls getCampaignsByStatus for each status
+    vi.mocked(getAllCampaigns).mockReturnValue([CAMPAIGN]);
     vi.mocked(getCampaignsByStatus).mockReturnValue([CAMPAIGN]);
 });
 
@@ -116,6 +117,7 @@ describe('Post routes', () => {
     describe('POST /api/bodyspace/posts/:id/image/approve', () => {
         it('approves the image draft', async () => {
             const campaignWithImage = { ...CAMPAIGN, posts: [POST_WITH_IMAGE] };
+            vi.mocked(getAllCampaigns).mockReturnValue([campaignWithImage]);
             vi.mocked(getCampaignsByStatus).mockReturnValue([campaignWithImage]);
             vi.mocked(getPostById).mockReturnValue(POST_WITH_IMAGE);
             const res = await request(app).post(`/api/bodyspace/posts/${POST_WITH_IMAGE.id}/image/approve`);

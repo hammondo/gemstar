@@ -78,6 +78,10 @@ export const settings = {
     sanityToken: process.env.SANITY_API_TOKEN ?? '',
     sanityBlogAuthor: process.env.SANITY_BLOG_AUTHOR ?? 'BodySpace Team',
 
+    // Claude model IDs
+    monitorModel: 'claude-sonnet-4-20250514',
+    fastModel: 'claude-haiku-4-5-20251001',
+
     // Misc
     logLevel: process.env.LOG_LEVEL ?? 'info',
     nodeEnv: process.env.NODE_ENV ?? 'development',

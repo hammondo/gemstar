@@ -1,7 +1,8 @@
 // src/types.ts — Shared types used across all agents and workflows
 
 export type AvailabilitySignal = 'push' | 'hold' | 'pause';
-export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
+export const CAMPAIGN_STATUSES = ['draft', 'pending_review', 'approved', 'rejected', 'scheduled', 'published'] as const;
+export type CampaignStatus = typeof CAMPAIGN_STATUSES[number];
 export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'used';
 export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
 export type SanitySyncStatus = 'pending' | 'synced' | 'skipped' | 'failed';
@@ -150,6 +151,12 @@ export interface ServiceConfig {
     targetAudience: string[];
     contentNote?: string;
 }
+
+// ─── Shared agent callback ────────────────────────────────────────────────
+
+export type ProgressCallback = (p: { type: string; message: string }) => void;
+
+// ─── Brand voice config ───────────────────────────────────────────────────
 
 export interface BrandVoiceConfig {
     studio: {
