@@ -16,7 +16,7 @@ import {
     updatePostImage,
     updatePostSanitySync,
 } from '../bodyspace/db.js';
-import { failAudit, finishAudit, startAudit } from '../bodyspace/audit.js';
+import { withAudit } from '../bodyspace/audit.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 import type { Campaign, CampaignStatus, SocialPost } from '../bodyspace/types.js';
@@ -112,15 +112,11 @@ campaignsRouter.post('/campaigns/:id/approve', async (req, res) => {
         const approval = new ApprovalWorkflow();
         const campaign = approval.approveCampaign(campaignId, notes);
 
-        const auditId = startAudit('scheduler', 'api', req.session.user, { campaignId });
-        try {
+        await withAudit('scheduler', 'api', req.session.user, async () => {
             const scheduler = new SchedulerAgent();
             await scheduler.run(campaignId);
-            finishAudit(auditId, { campaignId });
-        } catch (err) {
-            failAudit(auditId, err);
-            throw err;
-        }
+            return { campaignId };
+        }, { input: { campaignId } });
 
         res.json({ ok: true, campaign });
     } catch (err) {
@@ -312,15 +308,11 @@ campaignsRouter.post('/posts/:id/blog/sync', async (req, res) => {
 campaignsRouter.post('/schedule', async (req, res) => {
     try {
         const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
-        const auditId = startAudit('scheduler', 'api', req.session.user, campaignId ? { campaignId } : undefined);
-        try {
+        await withAudit('scheduler', 'api', req.session.user, async () => {
             const scheduler = new SchedulerAgent();
             await scheduler.run(campaignId);
-            finishAudit(auditId, campaignId ? { campaignId } : undefined);
-        } catch (err) {
-            failAudit(auditId, err);
-            throw err;
-        }
+            return campaignId ? { campaignId } : undefined;
+        }, { input: campaignId ? { campaignId } : undefined });
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });

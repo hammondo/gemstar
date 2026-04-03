@@ -3,7 +3,7 @@
 import { Router } from 'express';
 import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.js';
 import { LibraryGeneratorAgent } from '../bodyspace/agents/library-generator/agent.js';
-import { failAudit, finishAudit, startAudit } from '../bodyspace/audit.js';
+import { withAudit } from '../bodyspace/audit.js';
 import {
     getLibraryPosts,
     getPostById,
@@ -39,19 +39,13 @@ libraryRouter.post('/run/library', async (req, res) => {
         }
         const count = typeof postsPerService === 'number' ? postsPerService : 6;
 
-        const auditId = startAudit('library-generator', 'api', req.session.user, {
-            serviceIds,
-            postsPerService: count,
-        });
-        let posts;
-        try {
+        const posts = await withAudit('library-generator', 'api', req.session.user, async () => {
             const agent = new LibraryGeneratorAgent();
-            posts = await agent.run(serviceIds as string[], count);
-            finishAudit(auditId, { postsGenerated: posts.length });
-        } catch (err) {
-            failAudit(auditId, err);
-            throw err;
-        }
+            return agent.run(serviceIds as string[], count);
+        }, {
+            input: { serviceIds, postsPerService: count },
+            getOutput: (p) => ({ postsGenerated: p.length }),
+        });
 
         const imageGen = new ImageGeneratorAgent();
         void imageGen.runForPosts(posts).catch((err) => {
@@ -77,24 +71,24 @@ libraryRouter.post('/run/library/stream', async (req, res) => {
     const count = typeof postsPerService === 'number' ? postsPerService : 6;
     const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
 
-    const auditId = startAudit('library-generator', 'api', req.session.user, {
-        serviceIds,
-        postsPerService: count,
-    });
     try {
-        const agent = new LibraryGeneratorAgent();
-        const posts = await agent.run(serviceIds as string[], count, progress);
+        await withAudit('library-generator', 'api', req.session.user, async () => {
+            const agent = new LibraryGeneratorAgent();
+            const posts = await agent.run(serviceIds as string[], count, progress);
 
-        progress({ type: 'status', message: 'Post copy ready — generating images…' });
+            progress({ type: 'status', message: 'Post copy ready — generating images…' });
 
-        const imageGen = new ImageGeneratorAgent();
-        await imageGen.runForPosts(posts, progress);
+            const imageGen = new ImageGeneratorAgent();
+            await imageGen.runForPosts(posts, progress);
 
-        finishAudit(auditId, { postsGenerated: posts.length });
-        send('complete', { ok: true });
-        done();
+            send('complete', { ok: true });
+            done();
+            return posts;
+        }, {
+            input: { serviceIds, postsPerService: count },
+            getOutput: (posts) => ({ postsGenerated: posts.length }),
+        });
     } catch (err) {
-        failAudit(auditId, err);
         send('error', { message: String(err) });
         done();
     }

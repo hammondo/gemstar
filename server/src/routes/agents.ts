@@ -7,7 +7,7 @@ import { FreshaWatcherAgent } from '../bodyspace/agents/fresha-watcher/agent.js'
 import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.js';
 import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
 import { settings } from '../bodyspace/config.js';
-import { failAudit, finishAudit, startAudit } from '../bodyspace/audit.js';
+import { withAudit } from '../bodyspace/audit.js';
 import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
 import { getAgentLogger } from '../bodyspace/utils/logger.js';
 import { setupSSE } from './sse.js';
@@ -37,19 +37,16 @@ agentsRouter.post('/run/monitor', async (req, res) => {
 agentsRouter.get('/run/monitor/stream', (req, res) => {
     const { send, done, isClosed } = setupSSE(req, res);
 
-    const auditId = startAudit('monitor', 'api', req.session.user);
-    const agent = new MonitorAgent();
-    agent
-        .runStreaming((progress) => {
+    void withAudit('monitor', 'api', req.session.user, async () => {
+        const agent = new MonitorAgent();
+        const brief = await agent.runStreaming((progress) => {
             if (!isClosed()) send('progress', progress);
-        })
-        .then((brief) => {
-            finishAudit(auditId, { briefId: brief.id, confidence: brief.confidence });
-            send('complete', { ok: true });
-            done();
-        })
+        });
+        send('complete', { ok: true });
+        done();
+        return brief;
+    }, { getOutput: (brief) => ({ briefId: brief.id, confidence: brief.confidence }) })
         .catch((err) => {
-            failAudit(auditId, err);
             send('error', { message: String(err) });
             done();
         });
@@ -82,12 +79,11 @@ agentsRouter.post('/run/image-generator', async (req, res) => {
             res.status(400).json({ ok: false, error: 'campaignId is required' });
             return;
         }
-        const auditId = startAudit('image-generator', 'api', req.session.user, { campaignId });
         const agent = new ImageGeneratorAgent();
-        void agent.run(campaignId).then(() => {
-            finishAudit(auditId, { campaignId });
+        void withAudit('image-generator', 'api', req.session.user, () => agent.run(campaignId), {
+            input: { campaignId },
+            getOutput: () => ({ campaignId }),
         }).catch((err) => {
-            failAudit(auditId, err);
             log.error({ err }, '[Route] Image generator error');
         });
         res.json({ ok: true, message: 'Image generation started', campaignId });
@@ -119,17 +115,16 @@ agentsRouter.post('/fresha/import', async (req, res) => {
         const savePath = resolve(exportsDir, safeName);
         writeFileSync(savePath, csvContent, 'utf8');
 
-        const auditId = startAudit('fresha-watcher', 'api', req.session.user, { filename: safeName });
-        let signals;
-        try {
+        const signals = await withAudit('fresha-watcher', 'api', req.session.user, async () => {
             const watcher = new FreshaWatcherAgent();
-            signals = await watcher.run();
-            const pushCount = Object.values(signals).filter((v) => v.signal === 'push').length;
-            finishAudit(auditId, { signalCount: Object.keys(signals).length, pushCount });
-        } catch (err) {
-            failAudit(auditId, err);
-            throw err;
-        }
+            return watcher.run();
+        }, {
+            input: { filename: safeName },
+            getOutput: (s) => ({
+                signalCount: Object.keys(s).length,
+                pushCount: Object.values(s).filter((v) => v.signal === 'push').length,
+            }),
+        });
 
         res.json({ ok: true, filename: safeName, signals });
     } catch (err) {

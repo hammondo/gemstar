@@ -5,7 +5,7 @@ import { ImageGeneratorAgent } from './agents/image-generator/agent.js';
 import { MonitorAgent } from './agents/monitor/agent.js';
 import { settings } from './config.js';
 import { ApprovalWorkflow } from './workflows/approval.js';
-import { type AuditTrigger, type UserContext, failAudit, finishAudit, startAudit } from './audit.js';
+import { type AuditTrigger, type UserContext, withAudit } from './audit.js';
 
 export interface RunAllOptions {
     ownerBrief?: string;
@@ -16,35 +16,26 @@ export interface RunAllOptions {
 export class BodyspaceOrchestrator {
     async runFreshaWatcher(user?: UserContext | null, trigger: AuditTrigger = 'api'): Promise<void> {
         console.log('\n[Orchestrator] Running FreshaWatcher...');
-        const auditId = startAudit('fresha-watcher', trigger, user);
-        try {
+        await withAudit('fresha-watcher', trigger, user, async () => {
             const agent = new FreshaWatcherAgent();
             const signals = await agent.run();
             const pushCount = Object.values(signals).filter((v) => v.signal === 'push').length;
-            finishAudit(auditId, { signalCount: Object.keys(signals).length, pushCount });
-        } catch (err) {
-            failAudit(auditId, err);
-            throw err;
-        }
+            return { signalCount: Object.keys(signals).length, pushCount };
+        });
     }
 
     async runMonitor(user?: UserContext | null, trigger: AuditTrigger = 'api'): Promise<void> {
         console.log('\n[Orchestrator] Running Monitor...');
-        const auditId = startAudit('monitor', trigger, user);
-        try {
+        await withAudit('monitor', trigger, user, async () => {
             const agent = new MonitorAgent();
             const brief = await agent.run();
-            finishAudit(auditId, { briefId: brief.id, confidence: brief.confidence });
-        } catch (err) {
-            failAudit(auditId, err);
-            throw err;
-        }
+            return { briefId: brief.id, confidence: brief.confidence };
+        });
     }
 
     async runCampaignPlanner(ownerBrief?: string, user?: UserContext | null, trigger: AuditTrigger = 'api'): Promise<void> {
         console.log('\n[Orchestrator] Running CampaignPlanner...');
-        const auditId = startAudit('campaign-planner', trigger, user, ownerBrief ? { ownerBrief } : undefined);
-        try {
+        await withAudit('campaign-planner', trigger, user, async () => {
             const approval = new ApprovalWorkflow();
             const planner = new CampaignPlannerAgent();
 
@@ -54,15 +45,12 @@ export class BodyspaceOrchestrator {
 
             if (pushCount === 0 && !ownerBrief) {
                 console.log('[Orchestrator] Skipping campaign: no PUSH services and no owner brief');
-                finishAudit(auditId, { skipped: true, reason: 'no PUSH services and no owner brief' });
-                return;
+                return { skipped: true, reason: 'no PUSH services and no owner brief' };
             }
 
             const campaign = await planner.run({ ownerBrief });
             await approval.notifyOwner(campaign);
             console.log(`[Orchestrator] Campaign '${campaign.name}' ready for owner review`);
-
-            finishAudit(auditId, { campaignId: campaign.id, campaignName: campaign.name });
 
             // Fire image generation in the background — owner sees notification immediately
             // and images arrive as drafts while they're reviewing the copy
@@ -70,10 +58,9 @@ export class BodyspaceOrchestrator {
             void imageGen.run(campaign.id).catch((err) => {
                 console.error('[Orchestrator] Image generation failed:', err);
             });
-        } catch (err) {
-            failAudit(auditId, err);
-            throw err;
-        }
+
+            return { campaignId: campaign.id, campaignName: campaign.name };
+        }, { input: ownerBrief ? { ownerBrief } : undefined });
     }
 
     async runAll(options: RunAllOptions = {}): Promise<void> {
