@@ -44,3 +44,21 @@ export function failAudit(id: string, error: unknown): void {
     startTimes.delete(id);
     failAuditEntry(id, durationMs, String(error));
 }
+
+export async function withAudit<T>(
+    agentName: string,
+    trigger: AuditTrigger,
+    user: UserContext | null | undefined,
+    fn: () => Promise<T>,
+    options?: { input?: unknown; getOutput?: (result: T) => unknown },
+): Promise<T> {
+    const auditId = startAudit(agentName, trigger, user, options?.input);
+    try {
+        const result = await fn();
+        finishAudit(auditId, options?.getOutput ? options.getOutput(result) : result ?? undefined);
+        return result;
+    } catch (err) {
+        failAudit(auditId, err);
+        throw err;
+    }
+}

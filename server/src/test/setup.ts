@@ -105,6 +105,7 @@ vi.mock('../bodyspace/audit.js', () => ({
     startAudit: vi.fn().mockReturnValue('audit-id-mock'),
     finishAudit: vi.fn(),
     failAudit: vi.fn(),
+    withAudit: vi.fn().mockImplementation((_name: string, _trigger: string, _user: unknown, fn: () => Promise<unknown>) => fn()),
 }));
 
 // ─── Third-party ──────────────────────────────────────────────────────────────
