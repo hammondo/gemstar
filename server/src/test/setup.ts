@@ -99,6 +99,13 @@ vi.mock('../bodyspace/services/meta-analytics.js', () => ({
     clearMetaCache: vi.fn(),
 }));
 
+vi.mock('../bodyspace/services/subject-inpainting.js', () => ({
+    runSubjectInpainting: vi.fn().mockResolvedValue({
+        requestId: 'mock-request-id',
+        imageUrl: 'http://localhost:3000/api/bodyspace/inpainting/results/mock-request-id.webp',
+    }),
+}));
+
 // ─── Third-party ──────────────────────────────────────────────────────────────
 
 vi.mock('@azure/msal-node', () => ({

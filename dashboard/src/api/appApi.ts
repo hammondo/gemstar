@@ -340,3 +340,29 @@ export function markLibraryPostUsed(postId: string): Promise<{ ok: boolean }> {
 export function reviveLibraryPost(postId: string): Promise<{ ok: boolean; post: SocialPost }> {
     return postJson(`/api/bodyspace/library/posts/${postId}/revive`);
 }
+
+// ── Subject inpainting ────────────────────────────────────────────────────────
+
+export type InpaintAspectRatio = '1:1' | '16:9' | '9:16' | '4:5';
+
+export interface SubjectInpaintingResult {
+    ok: boolean;
+    requestId: string;
+    imageUrl: string;
+}
+
+export async function generateSubjectInpainting(opts: {
+    subjectImage: File;
+    sceneDescription: string;
+    aspectRatio: InpaintAspectRatio;
+    referenceImages?: File[];
+}): Promise<SubjectInpaintingResult> {
+    const form = new FormData();
+    form.append('subjectImage', opts.subjectImage);
+    form.append('sceneDescription', opts.sceneDescription);
+    form.append('aspectRatio', opts.aspectRatio);
+    for (const ref of opts.referenceImages ?? []) {
+        form.append('referenceImages', ref);
+    }
+    return postForm<SubjectInpaintingResult>('/api/bodyspace/inpainting/generate', form);
+}

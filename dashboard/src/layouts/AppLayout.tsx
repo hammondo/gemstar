@@ -1,4 +1,4 @@
-import { Activity, BarChart3, BookOpen, FileText, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
+import { Activity, BarChart3, BookOpen, FileText, Image, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import type { AuthUser } from '../api/appApi';
 import logo from '../assets/logo.png';
@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
     { to: '/campaigns', icon: Megaphone, label: 'Campaigns' },
     { to: '/posts', icon: FileText, label: 'Posts' },
     { to: '/library', icon: BookOpen, label: 'Library' },
+    { to: '/inpainting', icon: Image, label: 'Inpainting' },
     { to: '/signals', icon: Activity, label: 'Signals' },
     { to: '/analytics', icon: BarChart3, label: 'Analytics' },
     { to: '/settings', icon: Settings, label: 'Settings' },

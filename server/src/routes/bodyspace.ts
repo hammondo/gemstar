@@ -28,6 +28,7 @@ import {
     updatePostSanitySync,
 } from '../bodyspace/db.js';
 import { clearMetaCache, getMetaAnalytics } from '../bodyspace/services/meta-analytics.js';
+import { runSubjectInpainting } from '../bodyspace/services/subject-inpainting.js';
 import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
@@ -864,5 +865,70 @@ bodyspaceRouter.post('/run/image-generator', async (req, res) => {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
+
+// ── Subject inpainting ─────────────────────────────────────────────────────────
+// Accepts a subject image upload + scene description, runs the rembg → FLUX Fill
+// pipeline and returns the result image URL.
+
+const inpaintingDir = resolve(settings.dataDir, 'inpainting');
+mkdirSync(inpaintingDir, { recursive: true });
+bodyspaceRouter.use('/inpainting/results', express.static(inpaintingDir));
+
+bodyspaceRouter.post(
+    '/inpainting/generate',
+    upload.fields([
+        { name: 'subjectImage', maxCount: 1 },
+        { name: 'referenceImages', maxCount: 5 },
+    ]),
+    async (req, res) => {
+        try {
+            const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+            const subjectFiles = files?.['subjectImage'];
+            if (!subjectFiles?.length) {
+                res.status(400).json({ ok: false, error: 'subjectImage file is required' });
+                return;
+            }
+
+            const sceneDescription =
+                typeof req.body?.sceneDescription === 'string' ? req.body.sceneDescription.trim() : '';
+            if (!sceneDescription) {
+                res.status(400).json({ ok: false, error: 'sceneDescription is required' });
+                return;
+            }
+
+            const aspectRatio = (req.body?.aspectRatio as string) || '1:1';
+            const validRatios = ['1:1', '16:9', '9:16', '4:5'];
+            if (!validRatios.includes(aspectRatio)) {
+                res.status(400).json({ ok: false, error: `aspectRatio must be one of: ${validRatios.join(', ')}` });
+                return;
+            }
+
+            const subjectFile = subjectFiles[0];
+            const subjectBuffer = readFileSync(subjectFile.path);
+            unlinkSync(subjectFile.path);
+
+            // Convert any reference image files to data URLs
+            const referenceImageUrls: string[] = [];
+            const refFiles = files?.['referenceImages'] ?? [];
+            for (const f of refFiles) {
+                const buf = readFileSync(f.path);
+                referenceImageUrls.push(`data:${f.mimetype};base64,${buf.toString('base64')}`);
+                unlinkSync(f.path);
+            }
+
+            const result = await runSubjectInpainting({
+                subjectBuffer,
+                subjectMimeType: subjectFile.mimetype,
+                sceneDescription,
+                aspectRatio: aspectRatio as '1:1' | '16:9' | '9:16' | '4:5',
+                referenceImageUrls: referenceImageUrls.length ? referenceImageUrls : undefined,
+            });
+
+            res.json({ ok: true, ...result });
+        } catch (err) {
+            res.status(500).json({ ok: false, error: String(err) });
+        }
+    }
+);
 
 export default bodyspaceRouter;
