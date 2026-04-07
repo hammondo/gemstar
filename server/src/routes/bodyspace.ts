@@ -1,21 +1,20 @@
 import Anthropic from '@anthropic-ai/sdk';
 import express, { Router } from 'express';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import multer from 'multer';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
+import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { FreshaWatcherAgent } from '../bodyspace/agents/fresha-watcher/agent.js';
 import { ImageGeneratorAgent } from '../bodyspace/agents/image-generator/agent.js';
 import { LibraryGeneratorAgent } from '../bodyspace/agents/library-generator/agent.js';
 import { MonitorAgent } from '../bodyspace/agents/monitor/agent.js';
-import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
 import { getAllServices, settings } from '../bodyspace/config.js';
-import { getMonitorSearchTerms, saveMonitorSearchTerms, getSelectedCampaignServices, saveSelectedCampaignServices } from '../bodyspace/settings-store.js';
 import {
-    getAllPosts,
     addPostToCampaign,
     clonePost,
+    getAllPosts,
     getCampaignById,
     getCampaignsByStatus,
     getLatestSignals,
@@ -23,15 +22,21 @@ import {
     getPostById,
     getPostCampaigns,
     schedulePost,
-    updateTrendsBrief,
     updatePostCopy,
     updatePostImage,
     updatePostSanitySync,
+    updateTrendsBrief,
 } from '../bodyspace/db.js';
-import { clearMetaCache, getMetaAnalytics } from '../bodyspace/services/meta-analytics.js';
-import { runSubjectInpainting } from '../bodyspace/services/subject-inpainting.js';
 import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
+import { clearMetaCache, getMetaAnalytics } from '../bodyspace/services/meta-analytics.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
+import { runSubjectInpainting } from '../bodyspace/services/subject-inpainting.js';
+import {
+    getMonitorSearchTerms,
+    getSelectedCampaignServices,
+    saveMonitorSearchTerms,
+    saveSelectedCampaignServices,
+} from '../bodyspace/settings-store.js';
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 
@@ -49,15 +54,23 @@ function setupSSE(req: IncomingMessage, res: ServerResponse) {
     });
 
     let closed = false;
-    const keepalive = setInterval(() => { if (!closed) res.write(': ping\n\n'); }, 25_000);
+    const keepalive = setInterval(() => {
+        if (!closed) res.write(': ping\n\n');
+    }, 25_000);
 
-    req.on('close', () => { closed = true; clearInterval(keepalive); });
+    req.on('close', () => {
+        closed = true;
+        clearInterval(keepalive);
+    });
 
     const send = (event: string, data: unknown) => {
         if (!closed) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    const done = () => { clearInterval(keepalive); if (!closed) res.end(); };
+    const done = () => {
+        clearInterval(keepalive);
+        if (!closed) res.end();
+    };
 
     return { send, done, isClosed: () => closed };
 }
@@ -190,8 +203,17 @@ bodyspaceRouter.get('/trends/latest', (_req, res) => {
 
 bodyspaceRouter.patch('/trends/:id', (req, res) => {
     const id = req.params.id as string;
-    const { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities } = req.body as Record<string, string>;
-    const brief = updateTrendsBrief(id, { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities });
+    const { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities } = req.body as Record<
+        string,
+        string
+    >;
+    const brief = updateTrendsBrief(id, {
+        competitorSummary,
+        trendSignals,
+        seasonalFactors,
+        recommendedFocus,
+        opportunities,
+    });
     res.json({ ok: true, brief });
 });
 
@@ -505,7 +527,10 @@ bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImag
             campaignId = campaigns[0]?.id;
         }
         if (!campaignId) {
-            res.status(400).json({ ok: false, error: 'No campaign associated with this post — pass campaignId explicitly' });
+            res.status(400).json({
+                ok: false,
+                error: 'No campaign associated with this post — pass campaignId explicitly',
+            });
             return;
         }
         const feedback = typeof req.body?.feedback === 'string' ? req.body.feedback.trim() : undefined;
@@ -582,11 +607,12 @@ bodyspaceRouter.post('/wizard/monitor/stream', (req, res) => {
     };
 
     const rawTerms = req.body?.terms;
-    const customTerms = Array.isArray(rawTerms) && rawTerms.every((t) => typeof t === 'string')
-        ? (rawTerms as string[])
-        : undefined;
+    const customTerms =
+        Array.isArray(rawTerms) && rawTerms.every((t) => typeof t === 'string') ? (rawTerms as string[]) : undefined;
     let closed = false;
-    req.on('close', () => { closed = true; });
+    req.on('close', () => {
+        closed = true;
+    });
 
     const agent = new MonitorAgent();
     agent
@@ -595,10 +621,16 @@ bodyspaceRouter.post('/wizard/monitor/stream', (req, res) => {
             send('progress', progress);
         }, customTerms)
         .then(() => {
-            if (!closed) { send('complete', { ok: true }); res.end(); }
+            if (!closed) {
+                send('complete', { ok: true });
+                res.end();
+            }
         })
         .catch((err) => {
-            if (!closed) { send('error', { message: String(err) }); res.end(); }
+            if (!closed) {
+                send('error', { message: String(err) });
+                res.end();
+            }
         });
 });
 
@@ -610,7 +642,9 @@ bodyspaceRouter.get('/wizard/campaign-prompt', (_req, res) => {
 bodyspaceRouter.post('/wizard/campaign', async (req, res) => {
     try {
         const ownerBrief = typeof req.body?.ownerBrief === 'string' ? req.body.ownerBrief : undefined;
-        const selectedServices = Array.isArray(req.body?.selectedServices) ? req.body.selectedServices as string[] : undefined;
+        const selectedServices = Array.isArray(req.body?.selectedServices)
+            ? (req.body.selectedServices as string[])
+            : undefined;
 
         const planner = new CampaignPlannerAgent();
         const campaign = await planner.run({ ownerBrief, selectedServices });
@@ -705,7 +739,9 @@ Return ONLY a JSON array of strings. Each string should be a full search instruc
 bodyspaceRouter.get('/library', (req, res) => {
     try {
         const { serviceId, status, variantTag, campaignId, source } = req.query as Record<string, string | undefined>;
-        const posts = getAllPosts({ serviceId, status, variantTag, campaignId, source } as Parameters<typeof getAllPosts>[0]);
+        const posts = getAllPosts({ serviceId, status, variantTag, campaignId, source } as Parameters<
+            typeof getAllPosts
+        >[0]);
         res.json({ ok: true, posts });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -739,22 +775,32 @@ bodyspaceRouter.post('/run/library', async (req, res) => {
     }
 });
 
-bodyspaceRouter.post('/run/library/stream', async (req, res) => {
+bodyspaceRouter.get('/run/library/stream', async (req, res) => {
     const { send, done, isClosed } = setupSSE(req, res);
 
-    const { serviceIds, postsPerService } = req.body as { serviceIds?: unknown; postsPerService?: unknown };
-    if (!Array.isArray(serviceIds) || !serviceIds.every((s) => typeof s === 'string')) {
-        send('error', { message: 'serviceIds must be an array of strings' });
+    const serviceIdsRaw = req.query.serviceIds;
+    const serviceIds = Array.isArray(serviceIdsRaw)
+        ? (serviceIdsRaw as string[])
+        : typeof serviceIdsRaw === 'string'
+          ? serviceIdsRaw.split(',')
+          : [];
+
+    if (serviceIds.length === 0) {
+        send('error', { message: 'serviceIds query parameter is required' });
         done();
         return;
     }
 
-    const count = typeof postsPerService === 'number' ? postsPerService : 6;
-    const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
+    const postsPerService = parseInt((req.query.postsPerService as string) || '6', 10);
+    const count = isNaN(postsPerService) ? 6 : postsPerService;
+
+    const progress = (p: { type: string; message: string }) => {
+        if (!isClosed()) send('progress', p);
+    };
 
     try {
         const agent = new LibraryGeneratorAgent();
-        const posts = await agent.run(serviceIds as string[], count, progress);
+        const posts = await agent.run(serviceIds, count, progress);
 
         progress({ type: 'status', message: 'Post copy ready — generating images…' });
 
@@ -769,10 +815,12 @@ bodyspaceRouter.post('/run/library/stream', async (req, res) => {
     }
 });
 
-bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
+bodyspaceRouter.get('/run/library/images/stream', async (req, res) => {
     const { send, done, isClosed } = setupSSE(req, res);
 
-    const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
+    const progress = (p: { type: string; message: string }) => {
+        if (!isClosed()) send('progress', p);
+    };
 
     try {
         const allPosts = getAllPosts();
@@ -784,7 +832,43 @@ bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
             return;
         }
 
-        progress({ type: 'status', message: `Found ${needed.length} post${needed.length !== 1 ? 's' : ''} needing images…` });
+        progress({
+            type: 'status',
+            message: `Found ${needed.length} post${needed.length !== 1 ? 's' : ''} needing images…`,
+        });
+
+        const imageGen = new ImageGeneratorAgent();
+        await imageGen.runForPosts(needed, progress);
+
+        send('complete', { ok: true });
+        done();
+    } catch (err) {
+        send('error', { message: String(err) });
+        done();
+    }
+});
+
+bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
+    const { send, done, isClosed } = setupSSE(req, res);
+
+    const progress = (p: { type: string; message: string }) => {
+        if (!isClosed()) send('progress', p);
+    };
+
+    try {
+        const allPosts = getAllPosts();
+        const needed = allPosts.filter((p) => p.imageStatus === 'needed' || p.imageStatus === 'generating');
+
+        if (needed.length === 0) {
+            send('complete', { ok: true });
+            done();
+            return;
+        }
+
+        progress({
+            type: 'status',
+            message: `Found ${needed.length} post${needed.length !== 1 ? 's' : ''} needing images…`,
+        });
 
         const imageGen = new ImageGeneratorAgent();
         await imageGen.runForPosts(needed, progress);
@@ -921,5 +1005,43 @@ bodyspaceRouter.post(
         }
     }
 );
+
+// ── SSE Test Endpoint ────────────────────────────────────────────────────────
+
+bodyspaceRouter.get('/test/sse', (req, res) => {
+    const { send, done } = setupSSE(req, res);
+    let count = 0;
+    const max = 5;
+
+    const interval = setInterval(() => {
+        count++;
+        send('progress', { type: 'test', message: `Test progress ${count}/${max}`, count });
+        if (count >= max) {
+            clearInterval(interval);
+            send('complete', { ok: true });
+            done();
+        }
+    }, 1000);
+
+    req.on('close', () => clearInterval(interval));
+});
+
+bodyspaceRouter.post('/test/sse-post', (req, res) => {
+    const { send, done } = setupSSE(req, res);
+    const { seconds = 5 } = req.body as { seconds?: number };
+    let count = 0;
+
+    const interval = setInterval(() => {
+        count++;
+        send('progress', { type: 'test', message: `Test progress ${count}/${seconds}`, count });
+        if (count >= seconds) {
+            clearInterval(interval);
+            send('complete', { ok: true });
+            done();
+        }
+    }, 1000);
+
+    req.on('close', () => clearInterval(interval));
+});
 
 export default bodyspaceRouter;

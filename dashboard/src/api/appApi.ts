@@ -339,11 +339,14 @@ export function streamGenerateLibraryPosts(
     postsPerService: number,
     callbacks: SSECallbacks<LibraryProgress>
 ): () => void {
-    return streamSSEPost('/api/bodyspace/run/library/stream', { serviceIds, postsPerService }, callbacks);
+    const params = new URLSearchParams();
+    serviceIds.forEach((id) => params.append('serviceIds', id));
+    params.append('postsPerService', postsPerService.toString());
+    return streamSSE(`/api/bodyspace/run/library/stream?${params.toString()}`, callbacks);
 }
 
 export function streamGenerateLibraryImages(callbacks: SSECallbacks<LibraryProgress>): () => void {
-    return streamSSEPost('/api/bodyspace/run/library/images/stream', {}, callbacks);
+    return streamSSE(`/api/bodyspace/run/library/images/stream`, callbacks);
 }
 
 // ── Subject inpainting ────────────────────────────────────────────────────────
@@ -370,4 +373,17 @@ export async function generateSubjectInpainting(opts: {
         form.append('referenceImages', ref);
     }
     return postForm<SubjectInpaintingResult>('/api/bodyspace/inpainting/generate', form);
+}
+
+// ── SSE Test ─────────────────────────────────────────────────────────────────
+
+export function streamSSETest(callbacks: SSECallbacks<{ message: string; count: number }>): () => void {
+    return streamSSE('/api/bodyspace/test/sse', callbacks);
+}
+
+export function streamSSEPostTest(
+    seconds: number,
+    callbacks: SSECallbacks<{ message: string; count: number }>
+): () => void {
+    return streamSSEPost('/api/bodyspace/test/sse-post', { seconds }, callbacks);
 }
