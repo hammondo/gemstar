@@ -78,7 +78,7 @@ export function streamSSEPost<T>(path: string, body: unknown, callbacks: SSECall
         });
 
         if (!res.ok || !res.body) {
-            const payload = await res.json().catch(() => ({})) as { error?: string };
+            const payload = (await res.json().catch(() => ({}))) as { error?: string };
             callbacks.onError?.(payload.error ?? `HTTP ${res.status}`);
             return;
         }
@@ -93,23 +93,38 @@ export function streamSSEPost<T>(path: string, body: unknown, callbacks: SSECall
             buffer += decoder.decode(value, { stream: true });
 
             const messages = buffer.split('\n\n');
+            // The last part might be an incomplete message, keep it in the buffer
             buffer = messages.pop() ?? '';
 
             for (const msg of messages) {
+                if (!msg.trim()) continue;
+
                 let eventType = '';
                 let data = '';
                 for (const line of msg.split('\n')) {
                     if (line.startsWith('event: ')) eventType = line.slice(7).trim();
-                    else if (line.startsWith('data: ')) data = line.slice(6);
+                    else if (line.startsWith('data: ')) {
+                        const content = line.slice(6).trim();
+                        if (content) data = content;
+                    }
                 }
+
                 if (eventType === 'progress' && data) {
-                    callbacks.onProgress?.(JSON.parse(data) as T);
+                    try {
+                        callbacks.onProgress?.(JSON.parse(data) as T);
+                    } catch (e) {
+                        console.error('Failed to parse SSE progress data:', data, e);
+                    }
                 } else if (eventType === 'complete') {
                     completed = true;
                     callbacks.onComplete?.();
                 } else if (eventType === 'error' && data) {
-                    const parsed = JSON.parse(data) as { message?: string };
-                    callbacks.onError?.(parsed.message ?? 'Unknown error');
+                    try {
+                        const parsed = JSON.parse(data) as { message?: string };
+                        callbacks.onError?.(parsed.message ?? 'Unknown error');
+                    } catch (e) {
+                        callbacks.onError?.(data);
+                    }
                 }
             }
         }

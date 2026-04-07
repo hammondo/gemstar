@@ -27,14 +27,19 @@ function unwrap<T>(result: { data?: T; error?: unknown }): T {
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
-export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'used';
+export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
 export type PostSource = 'campaign' | 'library';
 export type VariantTag = 'promotional' | 'educational' | 'seasonal' | 'community';
 export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
 
+export interface CampaignRef {
+    id: string;
+    name: string;
+}
+
 export interface SocialPost {
     id: string;
-    campaignId?: string;
+    campaigns?: CampaignRef[];
     source?: PostSource;
     serviceId?: string;
     variantTag?: VariantTag;
@@ -130,6 +135,14 @@ export async function rejectPost(id: string, reason?: string) {
             body: { reason },
         })
     );
+}
+
+export function clonePost(postId: string): Promise<{ ok: boolean; post: SocialPost }> {
+    return postJson(`/api/bodyspace/posts/${postId}/clone`);
+}
+
+export function schedulePost(postId: string, scheduledFor: string): Promise<{ ok: boolean; post: SocialPost }> {
+    return patchJson(`/api/bodyspace/posts/${postId}/schedule`, { scheduledFor });
 }
 
 // ── Image management ──────────────────────────────────────────────────────────
@@ -297,24 +310,28 @@ export async function importFreshaCsv(csvContent: string, filename: string) {
     return unwrap(await client.POST('/api/bodyspace/fresha/import', { body: { csvContent, filename } }));
 }
 
-// ── Library ───────────────────────────────────────────────────────────────────
+// ── Library (all posts) ───────────────────────────────────────────────────────
 
-export function getLibraryPosts(filters?: {
+export interface LibraryProgress {
+    type: string;
+    message: string;
+}
+
+export function getPosts(filters?: {
     serviceId?: string;
     status?: PostStatus;
     variantTag?: VariantTag;
+    campaignId?: string;
+    source?: PostSource;
 }): Promise<{ ok: boolean; posts: SocialPost[] }> {
     const params = new URLSearchParams();
     if (filters?.serviceId) params.set('serviceId', filters.serviceId);
     if (filters?.status) params.set('status', filters.status);
     if (filters?.variantTag) params.set('variantTag', filters.variantTag);
+    if (filters?.campaignId) params.set('campaignId', filters.campaignId);
+    if (filters?.source) params.set('source', filters.source);
     const qs = params.size ? `?${params.toString()}` : '';
     return fetchJson(`/api/bodyspace/library${qs}`);
-}
-
-export interface LibraryProgress {
-    type: string;
-    message: string;
 }
 
 export function streamGenerateLibraryPosts(
@@ -322,23 +339,14 @@ export function streamGenerateLibraryPosts(
     postsPerService: number,
     callbacks: SSECallbacks<LibraryProgress>
 ): () => void {
-    return streamSSEPost('/api/bodyspace/run/library/stream', { serviceIds, postsPerService }, callbacks);
+    const params = new URLSearchParams();
+    serviceIds.forEach((id) => params.append('serviceIds', id));
+    params.append('postsPerService', postsPerService.toString());
+    return streamSSE(`/api/bodyspace/run/library/stream?${params.toString()}`, callbacks);
 }
 
 export function streamGenerateLibraryImages(callbacks: SSECallbacks<LibraryProgress>): () => void {
-    return streamSSEPost('/api/bodyspace/run/library/images/stream', {}, callbacks);
-}
-
-export function scheduleLibraryPost(postId: string, scheduledFor: string): Promise<{ ok: boolean; post: SocialPost }> {
-    return patchJson(`/api/bodyspace/library/posts/${postId}/schedule`, { scheduledFor });
-}
-
-export function markLibraryPostUsed(postId: string): Promise<{ ok: boolean }> {
-    return postJson(`/api/bodyspace/library/posts/${postId}/used`);
-}
-
-export function reviveLibraryPost(postId: string): Promise<{ ok: boolean; post: SocialPost }> {
-    return postJson(`/api/bodyspace/library/posts/${postId}/revive`);
+    return streamSSE(`/api/bodyspace/run/library/images/stream`, callbacks);
 }
 
 // ── Subject inpainting ────────────────────────────────────────────────────────
@@ -365,4 +373,17 @@ export async function generateSubjectInpainting(opts: {
         form.append('referenceImages', ref);
     }
     return postForm<SubjectInpaintingResult>('/api/bodyspace/inpainting/generate', form);
+}
+
+// ── SSE Test ─────────────────────────────────────────────────────────────────
+
+export function streamSSETest(callbacks: SSECallbacks<{ message: string; count: number }>): () => void {
+    return streamSSE('/api/bodyspace/test/sse', callbacks);
+}
+
+export function streamSSEPostTest(
+    seconds: number,
+    callbacks: SSECallbacks<{ message: string; count: number }>
+): () => void {
+    return streamSSEPost('/api/bodyspace/test/sse-post', { seconds }, callbacks);
 }

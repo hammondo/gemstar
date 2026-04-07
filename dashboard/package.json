@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "npx tsc --noEmit",
+    "lint": "tsc -p ./tsconfig.app.json --noEmit",
+    "lint:watch": "tsc -p ./tsconfig.app.json --noEmit --watch",
     "gen:api": "openapi-typescript src/api/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
