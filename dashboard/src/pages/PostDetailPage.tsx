@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
     type SocialPost,
     approvePost,
     approvePostImage,
+    clonePost,
     getPost,
     regeneratePostImage,
     regeneratePostImageWithFile,
@@ -24,7 +25,7 @@ export default function PostDetailPage() {
     const [scheduledFor, setScheduledFor] = useState('');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [acting, setActing] = useState<'approving' | 'rejecting' | null>(null);
+    const [acting, setActing] = useState<'approving' | 'rejecting' | 'cloning' | null>(null);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [imageFeedback, setImageFeedback] = useState('');
@@ -82,19 +83,33 @@ export default function PostDetailPage() {
         }
     }
 
+    async function handleClone() {
+        if (!id) return;
+        setActing('cloning');
+        try {
+            await clonePost(id);
+            navigate('/library');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to clone post');
+            setActing(null);
+        }
+    }
+
     async function handleImageGenerate() {
         if (!id || !post) return;
         setImageActing('generating');
         setImageError(null);
+        // Use the first associated campaign as context; server will look it up if omitted
+        const campaignId = post.campaigns?.[0]?.id ?? '';
         try {
             let result;
             if (imageRefFile) {
-                result = await regeneratePostImageWithFile(post.id, post.campaignId ?? '', {
+                result = await regeneratePostImageWithFile(post.id, campaignId, {
                     feedback: imageFeedback || undefined,
                     file: imageRefFile,
                 });
             } else {
-                result = await regeneratePostImage(post.id, post.campaignId ?? '', {
+                result = await regeneratePostImage(post.id, campaignId, {
                     feedback: imageFeedback || undefined,
                     referenceImageUrl: imageRefUrl || undefined,
                 });
@@ -175,31 +190,40 @@ export default function PostDetailPage() {
                 title="Edit Post"
                 subtitle={`${post.platform} · ${post.postType}`}
                 actions={
-                    canEdit ? (
-                        <>
-                            <button
-                                onClick={() => void handleReject()}
-                                disabled={!!acting}
-                                className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-muted transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
-                            >
-                                {acting === 'rejecting' ? 'Rejecting…' : 'Reject'}
-                            </button>
-                            <button
-                                onClick={() => void handleSave()}
-                                disabled={saving || !!acting}
-                                className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
-                            >
-                                {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
-                            </button>
-                            <button
-                                onClick={() => void handleApprove()}
-                                disabled={!!acting || saving}
-                                className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
-                            >
-                                {acting === 'approving' ? 'Approving…' : 'Approve'}
-                            </button>
-                        </>
-                    ) : undefined
+                    <>
+                        <button
+                            onClick={() => void handleClone()}
+                            disabled={!!acting}
+                            className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
+                        >
+                            {acting === 'cloning' ? 'Cloning…' : 'Clone as draft'}
+                        </button>
+                        {canEdit && (
+                            <>
+                                <button
+                                    onClick={() => void handleReject()}
+                                    disabled={!!acting}
+                                    className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-muted transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                                >
+                                    {acting === 'rejecting' ? 'Rejecting…' : 'Reject'}
+                                </button>
+                                <button
+                                    onClick={() => void handleSave()}
+                                    disabled={saving || !!acting}
+                                    className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
+                                >
+                                    {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+                                </button>
+                                <button
+                                    onClick={() => void handleApprove()}
+                                    disabled={!!acting || saving}
+                                    className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
+                                >
+                                    {acting === 'approving' ? 'Approving…' : 'Approve'}
+                                </button>
+                            </>
+                        )}
+                    </>
                 }
             />
 
@@ -397,6 +421,23 @@ export default function PostDetailPage() {
                             </div>
                         </div>
                     </div>
+
+                    {post.campaigns && post.campaigns.length > 0 && (
+                        <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
+                            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Used in campaigns</p>
+                            <div className="flex flex-wrap gap-2">
+                                {post.campaigns.map((c) => (
+                                    <Link
+                                        key={c.id}
+                                        to={`/campaigns/${c.id}`}
+                                        className="rounded-full bg-teal-400/15 px-3 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-400/25 transition"
+                                    >
+                                        {c.name}
+                                    </Link>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
                         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Details</p>

@@ -2,20 +2,19 @@ import { BookOpen, ImagePlus, LayoutGrid, List, RefreshCw, Sparkles } from 'luci
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    type ServiceAvailability,
     type LibraryProgress,
     type ServiceInfo,
     type SocialPost,
     type PostStatus,
     type VariantTag,
-    streamGenerateLibraryPosts,
-    streamGenerateLibraryImages,
-    getLibraryPosts,
+    clonePost,
+    getPosts,
     getServices,
     getSignals,
-    markLibraryPostUsed,
-    reviveLibraryPost,
-    scheduleLibraryPost,
+    schedulePost,
+    streamGenerateLibraryImages,
+    streamGenerateLibraryPosts,
+    type ServiceAvailability,
 } from '../api/appApi';
 import Badge from '../components/Badge';
 import PageHeader from '../components/PageHeader';
@@ -23,7 +22,7 @@ import PostGrid from '../components/PostGrid';
 import ServiceSelector from '../components/ServiceSelector';
 
 const ALL_STATUSES: Array<PostStatus | 'all'> = [
-    'all', 'pending_review', 'approved', 'scheduled', 'used', 'rejected',
+    'all', 'pending_review', 'approved', 'scheduled', 'published', 'rejected',
 ];
 
 const VARIANT_TAGS: Array<VariantTag | 'all'> = [
@@ -35,7 +34,7 @@ const statusLabel: Record<string, string> = {
     pending_review: 'Pending review',
     approved: 'Approved',
     scheduled: 'Scheduled',
-    used: 'Used',
+    published: 'Published',
     rejected: 'Rejected',
 };
 
@@ -122,10 +121,10 @@ export default function LibraryPage() {
         setLoading(true);
         setError(null);
         try {
-            const { posts: p } = await getLibraryPosts();
+            const { posts: p } = await getPosts();
             setPosts(p);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load library');
+            setError(err instanceof Error ? err.message : 'Failed to load posts');
         } finally {
             setLoading(false);
         }
@@ -144,7 +143,7 @@ export default function LibraryPage() {
         return services.find((s) => s.id === id)?.name ?? id;
     }
 
-    // Apply filters client-side (all posts already fetched)
+    // Apply filters client-side
     const filtered = posts.filter((p) => {
         if (serviceFilter !== 'all' && p.serviceId !== serviceFilter) return false;
         if (statusFilter !== 'all' && p.status !== statusFilter) return false;
@@ -152,19 +151,24 @@ export default function LibraryPage() {
         return true;
     });
 
-    // Group by service for display
+    // Group by service for display (posts with no serviceId go under 'campaign')
     const grouped = filtered.reduce<Record<string, SocialPost[]>>((acc, post) => {
-        const key = post.serviceId ?? 'unknown';
+        const key = post.serviceId ?? '_campaign';
         (acc[key] ??= []).push(post);
         return acc;
     }, {});
+
+    function groupLabel(key: string) {
+        if (key === '_campaign') return 'Campaign posts';
+        return serviceName(key);
+    }
 
     async function handleSchedule() {
         if (!schedulingPostId || !scheduledFor) return;
         setScheduling(true);
         try {
             const iso = new Date(scheduledFor).toISOString();
-            const { post } = await scheduleLibraryPost(schedulingPostId, iso);
+            const { post } = await schedulePost(schedulingPostId, iso);
             setPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)));
             setSchedulingPostId(null);
             setScheduledFor('');
@@ -175,27 +179,13 @@ export default function LibraryPage() {
         }
     }
 
-    async function handleMarkUsed(postId: string) {
-        setActing((a) => ({ ...a, [postId]: 'used' }));
+    async function handleClone(postId: string) {
+        setActing((a) => ({ ...a, [postId]: 'cloning' }));
         try {
-            await markLibraryPostUsed(postId);
-            setPosts((prev) =>
-                prev.map((p) => (p.id === postId ? { ...p, status: 'used' as PostStatus } : p)),
-            );
+            const { post } = await clonePost(postId);
+            setPosts((prev) => [post, ...prev]);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to mark as used');
-        } finally {
-            setActing((a) => { const n = { ...a }; delete n[postId]; return n; });
-        }
-    }
-
-    async function handleRevive(postId: string) {
-        setActing((a) => ({ ...a, [postId]: 'reviving' }));
-        try {
-            const { post } = await reviveLibraryPost(postId);
-            setPosts((prev) => [...prev, post]);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to revive post');
+            setError(err instanceof Error ? err.message : 'Failed to clone post');
         } finally {
             setActing((a) => { const n = { ...a }; delete n[postId]; return n; });
         }
@@ -270,8 +260,8 @@ export default function LibraryPage() {
     return (
         <>
             <PageHeader
-                title="Content Library"
-                subtitle={`${posts.length} post${posts.length !== 1 ? 's' : ''} · ${posts.filter((p) => p.status === 'used').length} used`}
+                title="Posts"
+                subtitle={`${posts.length} post${posts.length !== 1 ? 's' : ''}`}
             />
 
             {error && (
@@ -382,7 +372,7 @@ export default function LibraryPage() {
             {/* ── Generate panel ── */}
             {showGenerate && (
                 <div className="mb-6 rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
-                    <h3 className="mb-4 text-sm font-semibold text-charcoal">Generate library posts</h3>
+                    <h3 className="mb-4 text-sm font-semibold text-charcoal">Generate standalone posts</h3>
 
                     {generateState !== 'running' && generateState !== 'done' && (
                         <>
@@ -456,61 +446,57 @@ export default function LibraryPage() {
                     <BookOpen size={32} className="text-warm-300" />
                     <p className="text-sm text-muted">
                         {posts.length === 0
-                            ? 'No library posts yet. Generate some to get started.'
+                            ? 'No posts yet. Generate some or create a campaign to get started.'
                             : 'No posts match the current filters.'}
                     </p>
                 </div>
             ) : viewMode === 'grid' ? (
                 <div className="space-y-8">
-                    {Object.entries(grouped).map(([serviceId, servicePosts]) => (
-                        <section key={serviceId}>
+                    {Object.entries(grouped).map(([key, groupPosts]) => (
+                        <section key={key}>
                             <h2 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">
-                                {serviceName(serviceId)}
-                                <span className="ml-2 font-normal normal-case">({servicePosts.length})</span>
+                                {groupLabel(key)}
+                                <span className="ml-2 font-normal normal-case">({groupPosts.length})</span>
                             </h2>
                             <PostGrid
-                                posts={servicePosts}
-                                dimmed={(p) => p.status === 'used'}
+                                posts={groupPosts}
                                 renderFooter={(post) => {
-                                    const isUsed = post.status === 'used';
                                     const postActing = acting[post.id];
                                     return (
                                         <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
                                                 <Badge value={post.status} />
                                                 {post.imageStatus && post.imageStatus !== 'approved' && (
                                                     <Badge value={post.imageStatus} />
                                                 )}
+                                                {post.campaigns?.map((c) => (
+                                                    <Link
+                                                        key={c.id}
+                                                        to={`/campaigns/${c.id}`}
+                                                        className="rounded-full bg-teal-400/15 px-2 py-0.5 text-[10px] font-semibold text-teal-700 hover:bg-teal-400/25 transition"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {c.name}
+                                                    </Link>
+                                                ))}
                                             </div>
-                                            {isUsed ? (
+                                            <div className="flex items-center gap-1.5">
+                                                {canSchedule(post) && !post.scheduledFor && (
+                                                    <button
+                                                        onClick={() => { setSchedulingPostId(post.id); setScheduledFor(''); }}
+                                                        className="rounded-lg bg-teal-400 px-2.5 py-1 text-xs font-semibold text-charcoal transition hover:brightness-110"
+                                                    >
+                                                        Schedule
+                                                    </button>
+                                                )}
                                                 <button
-                                                    onClick={() => void handleRevive(post.id)}
+                                                    onClick={() => void handleClone(post.id)}
                                                     disabled={!!postActing}
                                                     className="rounded-lg border border-warm-200 px-2.5 py-1 text-xs font-medium text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
                                                 >
-                                                    {postActing === 'reviving' ? 'Reviving…' : 'Revive'}
+                                                    {postActing === 'cloning' ? 'Cloning…' : 'Clone'}
                                                 </button>
-                                            ) : (
-                                                <>
-                                                    {canSchedule(post) && !post.scheduledFor && (
-                                                        <button
-                                                            onClick={() => { setSchedulingPostId(post.id); setScheduledFor(''); }}
-                                                            className="rounded-lg bg-teal-400 px-2.5 py-1 text-xs font-semibold text-charcoal transition hover:brightness-110"
-                                                        >
-                                                            Schedule
-                                                        </button>
-                                                    )}
-                                                    {post.status === 'published' && (
-                                                        <button
-                                                            onClick={() => void handleMarkUsed(post.id)}
-                                                            disabled={!!postActing}
-                                                            className="rounded-lg border border-warm-200 px-2.5 py-1 text-xs font-medium text-muted transition hover:bg-warm-100 disabled:opacity-50"
-                                                        >
-                                                            {postActing === 'used' ? 'Marking…' : 'Mark used'}
-                                                        </button>
-                                                    )}
-                                                </>
-                                            )}
+                                            </div>
                                         </div>
                                     );
                                 }}
@@ -520,11 +506,11 @@ export default function LibraryPage() {
                 </div>
             ) : (
                 <div className="space-y-8">
-                    {Object.entries(grouped).map(([serviceId, servicePosts]) => (
-                        <section key={serviceId}>
+                    {Object.entries(grouped).map(([key, groupPosts]) => (
+                        <section key={key}>
                             <h2 className="mb-3 text-xs font-semibold tracking-wider text-muted uppercase">
-                                {serviceName(serviceId)}
-                                <span className="ml-2 font-normal normal-case">({servicePosts.length})</span>
+                                {groupLabel(key)}
+                                <span className="ml-2 font-normal normal-case">({groupPosts.length})</span>
                             </h2>
 
                             <div className="rounded-2xl border border-warm-200 bg-white shadow-sm overflow-hidden">
@@ -534,6 +520,7 @@ export default function LibraryPage() {
                                             <th className="px-5 py-3">Copy</th>
                                             <th className="px-5 py-3">Platform</th>
                                             <th className="px-5 py-3">Type</th>
+                                            <th className="px-5 py-3">Campaigns</th>
                                             <th className="px-5 py-3">Status</th>
                                             <th className="px-5 py-3">Image</th>
                                             <th className="px-5 py-3">Scheduled</th>
@@ -541,17 +528,16 @@ export default function LibraryPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-warm-200">
-                                        {servicePosts.map((post) => {
-                                            const isUsed = post.status === 'used';
+                                        {groupPosts.map((post) => {
                                             const postActing = acting[post.id];
                                             return (
                                                 <tr
                                                     key={post.id}
-                                                    className={`transition-colors ${isUsed ? 'opacity-60' : 'hover:bg-warm-100'}`}
+                                                    className="hover:bg-warm-100 transition-colors"
                                                 >
                                                     <td className="px-5 py-3.5 max-w-xs">
                                                         <Link to={`/posts/${post.id}`} className="block">
-                                                            <p className={`truncate text-xs ${isUsed ? 'text-muted' : 'text-charcoal'}`}>
+                                                            <p className="truncate text-xs text-charcoal">
                                                                 {post.ownerEdit ?? post.copy}
                                                             </p>
                                                         </Link>
@@ -566,6 +552,22 @@ export default function LibraryPage() {
                                                         {post.variantTag ?? post.contentPillar ?? '—'}
                                                     </td>
                                                     <td className="px-5 py-3.5">
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {post.campaigns?.length > 0
+                                                                ? post.campaigns.map((c) => (
+                                                                    <Link
+                                                                        key={c.id}
+                                                                        to={`/campaigns/${c.id}`}
+                                                                        className="rounded-full bg-teal-400/15 px-2 py-0.5 text-[10px] font-semibold text-teal-700 hover:bg-teal-400/25 transition whitespace-nowrap"
+                                                                    >
+                                                                        {c.name}
+                                                                    </Link>
+                                                                ))
+                                                                : <span className="text-xs text-muted">—</span>
+                                                            }
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-5 py-3.5">
                                                         <Badge value={post.status} />
                                                     </td>
                                                     <td className="px-5 py-3.5">
@@ -578,38 +580,24 @@ export default function LibraryPage() {
                                                     </td>
                                                     <td className="px-5 py-3.5">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            {isUsed ? (
+                                                            {canSchedule(post) && !post.scheduledFor && (
                                                                 <button
-                                                                    onClick={() => void handleRevive(post.id)}
-                                                                    disabled={!!postActing}
-                                                                    className="rounded-lg border border-warm-200 px-3 py-1 text-xs font-medium text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
+                                                                    onClick={() => {
+                                                                        setSchedulingPostId(post.id);
+                                                                        setScheduledFor('');
+                                                                    }}
+                                                                    className="rounded-lg bg-teal-400 px-3 py-1 text-xs font-semibold text-charcoal transition hover:brightness-110"
                                                                 >
-                                                                    {postActing === 'reviving' ? 'Reviving…' : 'Revive'}
+                                                                    Schedule
                                                                 </button>
-                                                            ) : (
-                                                                <>
-                                                                    {canSchedule(post) && !post.scheduledFor && (
-                                                                        <button
-                                                                            onClick={() => {
-                                                                                setSchedulingPostId(post.id);
-                                                                                setScheduledFor('');
-                                                                            }}
-                                                                            className="rounded-lg bg-teal-400 px-3 py-1 text-xs font-semibold text-charcoal transition hover:brightness-110"
-                                                                        >
-                                                                            Schedule
-                                                                        </button>
-                                                                    )}
-                                                                    {post.status === 'published' && (
-                                                                        <button
-                                                                            onClick={() => void handleMarkUsed(post.id)}
-                                                                            disabled={!!postActing}
-                                                                            className="rounded-lg border border-warm-200 px-3 py-1 text-xs font-medium text-muted transition hover:bg-warm-100 disabled:opacity-50"
-                                                                        >
-                                                                            {postActing === 'used' ? 'Marking…' : 'Mark used'}
-                                                                        </button>
-                                                                    )}
-                                                                </>
                                                             )}
+                                                            <button
+                                                                onClick={() => void handleClone(post.id)}
+                                                                disabled={!!postActing}
+                                                                className="rounded-lg border border-warm-200 px-3 py-1 text-xs font-medium text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
+                                                            >
+                                                                {postActing === 'cloning' ? 'Cloning…' : 'Clone'}
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>

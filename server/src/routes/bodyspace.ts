@@ -13,16 +13,17 @@ import { SchedulerAgent } from '../bodyspace/agents/scheduler/agent.js';
 import { getAllServices, settings } from '../bodyspace/config.js';
 import { getMonitorSearchTerms, saveMonitorSearchTerms, getSelectedCampaignServices, saveSelectedCampaignServices } from '../bodyspace/settings-store.js';
 import {
+    getAllPosts,
+    addPostToCampaign,
+    clonePost,
     getCampaignById,
     getCampaignsByStatus,
     getLatestSignals,
     getLatestTrendsBrief,
-    getLibraryPosts,
-    markLibraryPostUsed,
-    reviveLibraryPost,
-    scheduleLibraryPost,
-    updateTrendsBrief,
     getPostById,
+    getPostCampaigns,
+    schedulePost,
+    updateTrendsBrief,
     updatePostCopy,
     updatePostImage,
     updatePostSanitySync,
@@ -93,10 +94,6 @@ function getAllCampaigns(): Campaign[] {
     return campaignStatuses.flatMap((status) => getCampaignsByStatus(status));
 }
 
-function findCampaignByPostId(postId: string): Campaign | null {
-    return getAllCampaigns().find((campaign) => campaign.posts.some((post) => post.id === postId)) ?? null;
-}
-
 async function trySyncApprovedPostToBlog(postId: string): Promise<{
     attempted: boolean;
     synced: boolean;
@@ -104,16 +101,14 @@ async function trySyncApprovedPostToBlog(postId: string): Promise<{
     documentId?: string;
     slug?: string;
 }> {
-    const campaign = findCampaignByPostId(postId);
-    const post = campaign?.posts.find((p) => p.id === postId);
-
-    if (!campaign || !post) {
-        updatePostSanitySync(postId, {
-            status: 'failed',
-            error: 'Post not found',
-        });
+    const post = getPostById(postId);
+    if (!post) {
+        updatePostSanitySync(postId, { status: 'failed', error: 'Post not found' });
         return { attempted: false, synced: false, reason: 'Post not found' };
     }
+
+    // Use the first associated campaign for context (optional — used for title fallback)
+    const campaign = post.campaigns[0] ? getCampaignById(post.campaigns[0].id) : null;
 
     try {
         const publisher = new SanityBlogPublisher();
@@ -134,22 +129,11 @@ async function trySyncApprovedPostToBlog(postId: string): Promise<{
             });
         }
 
-        return {
-            attempted: true,
-            ...result,
-        };
+        return { attempted: true, ...result };
     } catch (err) {
         const reason = String(err);
-        updatePostSanitySync(postId, {
-            status: 'failed',
-            error: reason,
-        });
-
-        return {
-            attempted: true,
-            synced: false,
-            reason,
-        };
+        updatePostSanitySync(postId, { status: 'failed', error: reason });
+        return { attempted: true, synced: false, reason };
     }
 }
 
@@ -370,8 +354,8 @@ bodyspaceRouter.post('/posts/:id/approve', async (req, res) => {
         approval.approvePost(postId, copy?.trim() || undefined);
 
         const blogSync = await trySyncApprovedPostToBlog(postId);
-        const campaign = findCampaignByPostId(postId);
-        res.json({ ok: true, campaignId: campaign?.id ?? null, blogSync });
+        const campaigns = getPostCampaigns(postId);
+        res.json({ ok: true, campaigns, blogSync });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
@@ -384,8 +368,8 @@ bodyspaceRouter.post('/posts/:id/reject', (req, res) => {
         const approval = new ApprovalWorkflow();
         approval.rejectPost(postId, reason);
 
-        const campaign = findCampaignByPostId(postId);
-        res.json({ ok: true, campaignId: campaign?.id ?? null });
+        const campaigns = getPostCampaigns(postId);
+        res.json({ ok: true, campaigns });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
@@ -480,8 +464,7 @@ bodyspaceRouter.post('/posts/:id/image/upload', upload.single('imageFile'), (req
 bodyspaceRouter.post('/posts/:id/image/approve', async (req, res) => {
     try {
         const postId = req.params.id;
-        const campaign = findCampaignByPostId(postId);
-        const post = campaign?.posts.find((p) => p.id === postId);
+        const post = getPostById(postId);
         if (!post) {
             res.status(404).json({ ok: false, error: 'Post not found' });
             return;
@@ -515,7 +498,16 @@ bodyspaceRouter.post('/posts/:id/blog/sync', async (req, res) => {
 bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImageFile'), async (req, res) => {
     try {
         const postId = req.params.id as string;
-        const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
+        // campaignId is optional — fall back to first associated campaign
+        let campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
+        if (!campaignId) {
+            const campaigns = getPostCampaigns(postId);
+            campaignId = campaigns[0]?.id;
+        }
+        if (!campaignId) {
+            res.status(400).json({ ok: false, error: 'No campaign associated with this post — pass campaignId explicitly' });
+            return;
+        }
         const feedback = typeof req.body?.feedback === 'string' ? req.body.feedback.trim() : undefined;
         let referenceImageUrl =
             typeof req.body?.referenceImageUrl === 'string' ? req.body.referenceImageUrl.trim() : undefined;
@@ -525,10 +517,6 @@ bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImag
             const buffer = readFileSync(file.path);
             referenceImageUrl = `data:${file.mimetype};base64,${buffer.toString('base64')}`;
             unlinkSync(file.path);
-        }
-        if (!campaignId) {
-            res.status(400).json({ ok: false, error: 'campaignId is required' });
-            return;
         }
         const agent = new ImageGeneratorAgent();
         const imageUrl = await agent.regenerate(postId, campaignId, feedback, referenceImageUrl);
@@ -712,12 +700,12 @@ Return ONLY a JSON array of strings. Each string should be a full search instruc
     }
 });
 
-// ── Library ───────────────────────────────────────────────────────────────
+// ── Library (universal post browser — all posts) ──────────────────────────
 
 bodyspaceRouter.get('/library', (req, res) => {
     try {
-        const { serviceId, status, variantTag } = req.query as Record<string, string | undefined>;
-        const posts = getLibraryPosts({ serviceId, status, variantTag } as Parameters<typeof getLibraryPosts>[0]);
+        const { serviceId, status, variantTag, campaignId, source } = req.query as Record<string, string | undefined>;
+        const posts = getAllPosts({ serviceId, status, variantTag, campaignId, source } as Parameters<typeof getAllPosts>[0]);
         res.json({ ok: true, posts });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -787,8 +775,8 @@ bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
     const progress = (p: { type: string; message: string }) => { if (!isClosed()) send('progress', p); };
 
     try {
-        const allLibraryPosts = getLibraryPosts();
-        const needed = allLibraryPosts.filter((p) => p.imageStatus === 'needed' || p.imageStatus === 'generating');
+        const allPosts = getAllPosts();
+        const needed = allPosts.filter((p) => p.imageStatus === 'needed' || p.imageStatus === 'generating');
 
         if (needed.length === 0) {
             send('complete', { ok: true });
@@ -809,20 +797,12 @@ bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
     }
 });
 
-bodyspaceRouter.post('/library/posts/:id/used', (req, res) => {
+// Clone any post as a new standalone draft
+bodyspaceRouter.post('/posts/:id/clone', (req, res) => {
     try {
-        markLibraryPostUsed(req.params.id);
-        res.json({ ok: true });
-    } catch (err) {
-        res.status(500).json({ ok: false, error: String(err) });
-    }
-});
-
-bodyspaceRouter.post('/library/posts/:id/revive', (req, res) => {
-    try {
-        const post = reviveLibraryPost(req.params.id);
+        const post = clonePost(req.params.id);
         if (!post) {
-            res.status(404).json({ ok: false, error: 'Post not found or not a library post' });
+            res.status(404).json({ ok: false, error: 'Post not found' });
             return;
         }
         res.json({ ok: true, post });
@@ -831,7 +811,8 @@ bodyspaceRouter.post('/library/posts/:id/revive', (req, res) => {
     }
 });
 
-bodyspaceRouter.patch('/library/posts/:id/schedule', (req, res) => {
+// Schedule any post (generalised — no longer library-only)
+bodyspaceRouter.patch('/posts/:id/schedule', (req, res) => {
     try {
         const postId = req.params.id;
         const { scheduledFor } = req.body as { scheduledFor?: string };
@@ -839,9 +820,19 @@ bodyspaceRouter.patch('/library/posts/:id/schedule', (req, res) => {
             res.status(400).json({ ok: false, error: 'scheduledFor is required' });
             return;
         }
-        scheduleLibraryPost(postId, scheduledFor);
+        schedulePost(postId, scheduledFor);
         const post = getPostById(postId);
         res.json({ ok: true, post });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+// Add a post to a campaign
+bodyspaceRouter.post('/campaigns/:id/posts/:postId', (req, res) => {
+    try {
+        addPostToCampaign(req.params.id, req.params.postId);
+        res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }

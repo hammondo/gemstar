@@ -4,7 +4,7 @@ export const TEST_USER = { id: 'user-001', name: 'Test User', email: 'test@examp
 
 export const POST: SocialPost = {
     id: 'post-001',
-    campaignId: 'cmp-001',
+    campaigns: [{ id: 'cmp-001', name: 'Autumn Wellness' }],
     platform: 'instagram',
     postType: 'feed',
     contentPillar: 'education',

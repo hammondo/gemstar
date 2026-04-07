@@ -2,7 +2,8 @@
 
 export type AvailabilitySignal = 'push' | 'hold' | 'pause';
 export type CampaignStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
-export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published' | 'used';
+export type PostStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'scheduled' | 'published';
+export type CampaignRef = { id: string; name: string };
 export type ImageStatus = 'needed' | 'generating' | 'draft' | 'approved';
 export type SanitySyncStatus = 'pending' | 'synced' | 'skipped' | 'failed';
 export type Platform = 'instagram' | 'facebook';
@@ -46,9 +47,9 @@ export interface TrendsBrief {
 
 export interface SocialPost {
     id: string;
-    campaignId?: string;  // undefined for library posts
+    campaigns: CampaignRef[];  // campaigns this post is used in (populated on fetch)
     source: PostSource;
-    serviceId?: string;   // set on library posts; campaign posts derive this from campaign.targetServices
+    serviceId?: string;        // set on library-generated posts
     variantTag?: VariantTag;
     platform: Platform;
     postType: PostType;

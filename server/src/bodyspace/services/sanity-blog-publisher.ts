@@ -26,7 +26,7 @@ export class SanityBlogPublisher {
         return Boolean(this.projectId && this.dataset && this.token);
     }
 
-    async syncApprovedPost(campaign: Campaign, post: SocialPost): Promise<BlogSyncResult> {
+    async syncApprovedPost(campaign: Campaign | null, post: SocialPost): Promise<BlogSyncResult> {
         if (!this.isConfigured()) {
             return {
                 synced: false,
@@ -155,7 +155,7 @@ export class SanityBlogPublisher {
         }
     }
 
-    private buildTitle(campaign: Campaign, post: SocialPost): string {
+    private buildTitle(campaign: Campaign | null, post: SocialPost): string {
         const copy = (post.ownerEdit ?? post.copy).trim();
         const firstSentence = copy
             .split(/[.!?]/)
@@ -164,7 +164,8 @@ export class SanityBlogPublisher {
         if (firstSentence) {
             return this.toTitleCase(firstSentence).slice(0, 90);
         }
-        return `${campaign.name} - ${post.contentPillar.replace(/_/g, ' ')}`;
+        const prefix = campaign?.name ?? 'BodySpace';
+        return `${prefix} - ${post.contentPillar.replace(/_/g, ' ')}`;
     }
 
     private buildSlug(title: string, postId: string): string {

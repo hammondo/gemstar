@@ -55,7 +55,6 @@ CREATE TABLE IF NOT EXISTS campaigns (
 
 CREATE TABLE IF NOT EXISTS social_posts (
   id TEXT PRIMARY KEY,
-  campaign_id TEXT REFERENCES campaigns(id) ON DELETE CASCADE,
   source TEXT NOT NULL DEFAULT 'campaign' CHECK(source IN ('campaign','library')),
   service_id TEXT,
   variant_tag TEXT CHECK(variant_tag IN ('promotional','educational','seasonal','community')),
@@ -78,11 +77,18 @@ CREATE TABLE IF NOT EXISTS social_posts (
   call_to_action TEXT,
   scheduled_for TEXT,
   status TEXT NOT NULL DEFAULT 'draft'
-    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published','used')),
+    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published')),
   postiz_post_id TEXT,
   rejection_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   published_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS campaign_posts (
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  post_id     TEXT NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+  added_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (campaign_id, post_id)
 );
 
 CREATE TABLE IF NOT EXISTS approval_notifications (
@@ -95,9 +101,12 @@ CREATE TABLE IF NOT EXISTS approval_notifications (
   acknowledged INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_posts_campaign ON social_posts(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_availability_service ON service_availability(service_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
+CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_posts_campaign ON campaign_posts(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_posts_post ON campaign_posts(post_id);
 `;
 
 // ─── DB singleton ─────────────────────────────────────────────────────────
@@ -121,7 +130,7 @@ export function getDb(): Database.Database {
 
 function runMigrations(db: Database.Database): void {
     // Safe additive migrations — swallow errors when column already exists
-    const migrations = [
+    const additiveMigrations = [
         'ALTER TABLE social_posts ADD COLUMN image_url TEXT',
         "ALTER TABLE social_posts ADD COLUMN image_status TEXT NOT NULL DEFAULT 'needed'",
         'ALTER TABLE social_posts ADD COLUMN sanity_document_id TEXT',
@@ -130,7 +139,7 @@ function runMigrations(db: Database.Database): void {
         'ALTER TABLE social_posts ADD COLUMN sanity_synced_at TEXT',
         'ALTER TABLE social_posts ADD COLUMN sanity_sync_error TEXT',
     ];
-    for (const sql of migrations) {
+    for (const sql of additiveMigrations) {
         try {
             db.exec(sql);
         } catch {
@@ -138,10 +147,9 @@ function runMigrations(db: Database.Database): void {
         }
     }
 
-    // Library post columns — requires table reconstruction to also drop NOT NULL on campaign_id.
-    // Check if already migrated before proceeding.
-    const columns = db.prepare('PRAGMA table_info(social_posts)').all() as Array<{ name: string }>;
-    const hasSource = columns.some((c) => c.name === 'source');
+    // Migration: add source column + make campaign_id nullable (old schema → new schema with source)
+    const columnsBeforeSource = db.prepare('PRAGMA table_info(social_posts)').all() as Array<{ name: string }>;
+    const hasSource = columnsBeforeSource.some((c) => c.name === 'source');
     if (!hasSource) {
         db.exec(`
             BEGIN TRANSACTION;
@@ -190,16 +198,16 @@ function runMigrations(db: Database.Database): void {
             FROM social_posts;
             DROP TABLE social_posts;
             ALTER TABLE social_posts_new RENAME TO social_posts;
-            CREATE INDEX IF NOT EXISTS idx_posts_campaign ON social_posts(campaign_id);
             CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
             CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
             COMMIT;
         `);
     }
 
-    // Add 'used' status — requires table reconstruction if existing CHECK constraint doesn't include it.
-    const schema = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='social_posts'").get() as { sql: string } | undefined)?.sql ?? '';
-    if (!schema.includes("'used'")) {
+    // Migration: add 'used' status if missing (intermediate step for DBs that went through old migration path)
+    const schemaV1 = (db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='social_posts'").get() as { sql: string } | undefined)?.sql ?? '';
+    const hasCampaignIdCol = (db.prepare('PRAGMA table_info(social_posts)').all() as Array<{ name: string }>).some((c) => c.name === 'campaign_id');
+    if (hasCampaignIdCol && !schemaV1.includes("'used'")) {
         db.exec(`
             BEGIN TRANSACTION;
             CREATE TABLE social_posts_new (
@@ -242,9 +250,92 @@ function runMigrations(db: Database.Database): void {
             FROM social_posts;
             DROP TABLE social_posts;
             ALTER TABLE social_posts_new RENAME TO social_posts;
-            CREATE INDEX IF NOT EXISTS idx_posts_campaign ON social_posts(campaign_id);
             CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
             CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
+            COMMIT;
+        `);
+    }
+
+    // Migration: many-to-many campaign↔post refactor
+    // - Create campaign_posts junction table
+    // - Populate from campaign_id column
+    // - Drop campaign_id, remove 'used' from status, convert 'used' rows → 'published'
+    const columnsNow = db.prepare('PRAGMA table_info(social_posts)').all() as Array<{ name: string }>;
+    const stillHasCampaignId = columnsNow.some((c) => c.name === 'campaign_id');
+    if (stillHasCampaignId) {
+        db.exec(`
+            BEGIN TRANSACTION;
+
+            -- Create junction table if not yet done
+            CREATE TABLE IF NOT EXISTS campaign_posts (
+                campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+                post_id     TEXT NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
+                added_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (campaign_id, post_id)
+            );
+
+            -- Populate junction from existing campaign_id values
+            INSERT OR IGNORE INTO campaign_posts (campaign_id, post_id)
+            SELECT campaign_id, id FROM social_posts WHERE campaign_id IS NOT NULL;
+
+            -- Promote 'used' → 'published' before dropping that status
+            UPDATE social_posts SET status = 'published', published_at = COALESCE(published_at, datetime('now'))
+            WHERE status = 'used';
+
+            -- Rebuild social_posts without campaign_id and without 'used' in CHECK
+            CREATE TABLE social_posts_new (
+                id TEXT PRIMARY KEY,
+                source TEXT NOT NULL DEFAULT 'campaign' CHECK(source IN ('campaign','library')),
+                service_id TEXT,
+                variant_tag TEXT CHECK(variant_tag IN ('promotional','educational','seasonal','community')),
+                platform TEXT NOT NULL CHECK(platform IN ('instagram','facebook')),
+                post_type TEXT NOT NULL DEFAULT 'feed' CHECK(post_type IN ('feed','story','reel')),
+                content_pillar TEXT,
+                copy TEXT NOT NULL,
+                owner_edit TEXT,
+                image_direction TEXT,
+                image_url TEXT,
+                image_status TEXT NOT NULL DEFAULT 'needed'
+                    CHECK(image_status IN ('needed','generating','draft','approved')),
+                sanity_document_id TEXT,
+                sanity_slug TEXT,
+                sanity_sync_status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(sanity_sync_status IN ('pending','synced','skipped','failed')),
+                sanity_synced_at TEXT,
+                sanity_sync_error TEXT,
+                hashtags TEXT,
+                call_to_action TEXT,
+                scheduled_for TEXT,
+                status TEXT NOT NULL DEFAULT 'draft'
+                    CHECK(status IN ('draft','pending_review','approved','rejected','scheduled','published')),
+                postiz_post_id TEXT,
+                rejection_reason TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                published_at TEXT
+            );
+            INSERT INTO social_posts_new
+                (id, source, service_id, variant_tag, platform, post_type, content_pillar,
+                 copy, owner_edit, image_direction, image_url, image_status, sanity_document_id,
+                 sanity_slug, sanity_sync_status, sanity_synced_at, sanity_sync_error,
+                 hashtags, call_to_action, scheduled_for, status, postiz_post_id,
+                 rejection_reason, created_at, published_at)
+            SELECT id, source, service_id, variant_tag, platform, post_type, content_pillar,
+                 copy, owner_edit, image_direction, image_url, image_status, sanity_document_id,
+                 sanity_slug, sanity_sync_status, sanity_synced_at, sanity_sync_error,
+                 hashtags, call_to_action, scheduled_for, status, postiz_post_id,
+                 rejection_reason, created_at, published_at
+            FROM social_posts;
+
+            -- Update FK references in campaign_posts to point to new table (safe: same IDs)
+            -- Drop old table and rename
+            DROP TABLE social_posts;
+            ALTER TABLE social_posts_new RENAME TO social_posts;
+
+            CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
+            CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
+            CREATE INDEX IF NOT EXISTS idx_campaign_posts_campaign ON campaign_posts(campaign_id);
+            CREATE INDEX IF NOT EXISTS idx_campaign_posts_post ON campaign_posts(post_id);
+
             COMMIT;
         `);
     }
@@ -258,6 +349,7 @@ function runMigrations(db: Database.Database): void {
 import { randomUUID } from 'crypto';
 import type {
     Campaign,
+    CampaignRef,
     CampaignStatus,
     GeneratedLibraryPost,
     ImageStatus,
@@ -439,19 +531,21 @@ export function saveCampaign(data: Omit<Campaign, 'id' | 'createdAt'>): Campaign
         now
     );
 
-    // Insert posts
     const insertPost = db.prepare(`
     INSERT INTO social_posts
-      (id, campaign_id, source, platform, post_type, content_pillar, copy,
+      (id, source, platform, post_type, content_pillar, copy,
        image_direction, hashtags, call_to_action, scheduled_for, status)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)
+  `);
+
+    const insertJunction = db.prepare(`
+    INSERT OR IGNORE INTO campaign_posts (campaign_id, post_id) VALUES (?, ?)
   `);
 
     const insertPosts = db.transaction((posts: SocialPost[]) => {
         for (const post of posts) {
             insertPost.run(
                 post.id,
-                id,
                 'campaign',
                 post.platform,
                 post.postType,
@@ -463,6 +557,7 @@ export function saveCampaign(data: Omit<Campaign, 'id' | 'createdAt'>): Campaign
                 post.scheduledFor ?? null,
                 post.status
             );
+            insertJunction.run(id, post.id);
         }
     });
 
@@ -477,7 +572,12 @@ export function getCampaignById(id: string): Campaign | null {
     if (!row) return null;
 
     const posts = db
-        .prepare('SELECT * FROM social_posts WHERE campaign_id = ? ORDER BY scheduled_for')
+        .prepare(`
+            SELECT sp.* FROM social_posts sp
+            JOIN campaign_posts cp ON cp.post_id = sp.id
+            WHERE cp.campaign_id = ?
+            ORDER BY sp.scheduled_for
+        `)
         .all(id) as Array<Record<string, unknown>>;
 
     return rowToCampaign(row, posts);
@@ -491,7 +591,12 @@ export function getCampaignsByStatus(status: CampaignStatus): Campaign[] {
 
     return rows.map((row) => {
         const posts = db
-            .prepare('SELECT * FROM social_posts WHERE campaign_id = ? ORDER BY scheduled_for')
+            .prepare(`
+                SELECT sp.* FROM social_posts sp
+                JOIN campaign_posts cp ON cp.post_id = sp.id
+                WHERE cp.campaign_id = ?
+                ORDER BY sp.scheduled_for
+            `)
             .all(row.id as string) as Array<Record<string, unknown>>;
         return rowToCampaign(row, posts);
     });
@@ -510,12 +615,32 @@ export function updateCampaignStatus(id: string, status: CampaignStatus, extra: 
     ).run(status, now, status, now, extra.ownerNotes ?? null, id);
 }
 
+// ─── Posts ────────────────────────────────────────────────────────────────
+
 export function getPostById(postId: string): SocialPost | null {
     const db = getDb();
     const row = db.prepare('SELECT * FROM social_posts WHERE id = ?').get(postId) as
         | Record<string, unknown>
         | undefined;
-    return row ? rowToPost(row) : null;
+    if (!row) return null;
+    const post = rowToPost(row);
+    return { ...post, campaigns: getPostCampaigns(postId) };
+}
+
+export function getPostCampaigns(postId: string): CampaignRef[] {
+    const db = getDb();
+    return db.prepare(`
+        SELECT c.id, c.name
+        FROM campaign_posts cp
+        JOIN campaigns c ON c.id = cp.campaign_id
+        WHERE cp.post_id = ?
+        ORDER BY c.created_at
+    `).all(postId) as CampaignRef[];
+}
+
+export function addPostToCampaign(campaignId: string, postId: string): void {
+    const db = getDb();
+    db.prepare('INSERT OR IGNORE INTO campaign_posts (campaign_id, post_id) VALUES (?, ?)').run(campaignId, postId);
 }
 
 export function updatePostCopy(postId: string, copy: string, scheduledFor?: string | null): void {
@@ -552,6 +677,11 @@ export function updatePostImage(postId: string, imageUrl: string, imageStatus: I
     );
 }
 
+export function schedulePost(postId: string, scheduledFor: string): void {
+    const db = getDb();
+    db.prepare(`UPDATE social_posts SET scheduled_for = ? WHERE id = ?`).run(scheduledFor, postId);
+}
+
 export function updatePostSanitySync(
     postId: string,
     data: {
@@ -576,7 +706,93 @@ export function updatePostSanitySync(
     ).run(data.status, data.documentId ?? null, data.slug ?? null, data.syncedAt ?? null, data.error ?? null, postId);
 }
 
-// ─── Library Posts ────────────────────────────────────────────────────────
+export function clonePost(postId: string): SocialPost | null {
+    const db = getDb();
+    const now = new Date().toISOString();
+    const newId = randomUUID();
+
+    const inserted = db.prepare(`
+        INSERT INTO social_posts
+            (id, source, service_id, variant_tag, platform, post_type, content_pillar,
+             copy, image_direction, image_url, image_status, hashtags, call_to_action,
+             status, created_at)
+        SELECT
+            ?, source, service_id, variant_tag, platform, post_type, content_pillar,
+            copy, image_direction, image_url,
+            CASE WHEN image_url IS NOT NULL AND image_url != '' THEN 'draft' ELSE 'needed' END,
+            hashtags, call_to_action,
+            'draft', ?
+        FROM social_posts
+        WHERE id = ?
+    `).run(newId, now, postId);
+
+    if (!inserted.changes) return null;
+    return getPostById(newId);
+}
+
+// ─── All Posts (unified library) ─────────────────────────────────────────
+
+export function getAllPosts(
+    filters: {
+        serviceId?: string;
+        status?: PostStatus;
+        variantTag?: VariantTag;
+        campaignId?: string;
+        source?: PostSource;
+    } = {}
+): SocialPost[] {
+    const db = getDb();
+
+    let query: string;
+    const params: unknown[] = [];
+
+    if (filters.campaignId) {
+        // Filter by campaign via junction table
+        const conditions = ['cp.campaign_id = ?'];
+        params.push(filters.campaignId);
+        if (filters.status) { conditions.push('sp.status = ?'); params.push(filters.status); }
+        if (filters.serviceId) { conditions.push('sp.service_id = ?'); params.push(filters.serviceId); }
+        if (filters.variantTag) { conditions.push('sp.variant_tag = ?'); params.push(filters.variantTag); }
+        if (filters.source) { conditions.push('sp.source = ?'); params.push(filters.source); }
+        query = `SELECT sp.* FROM social_posts sp JOIN campaign_posts cp ON cp.post_id = sp.id WHERE ${conditions.join(' AND ')} ORDER BY sp.scheduled_for`;
+    } else {
+        const conditions: string[] = [];
+        if (filters.status) { conditions.push('status = ?'); params.push(filters.status); }
+        if (filters.serviceId) { conditions.push('service_id = ?'); params.push(filters.serviceId); }
+        if (filters.variantTag) { conditions.push('variant_tag = ?'); params.push(filters.variantTag); }
+        if (filters.source) { conditions.push('source = ?'); params.push(filters.source); }
+        const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        query = `SELECT * FROM social_posts ${where} ORDER BY created_at DESC`;
+    }
+
+    const rows = db.prepare(query).all(...params) as Array<Record<string, unknown>>;
+    if (rows.length === 0) return [];
+
+    // Batch-load campaign associations
+    const postIds = rows.map((r) => r.id as string);
+    const placeholders = postIds.map(() => '?').join(',');
+    const campaignRefs = db.prepare(`
+        SELECT cp.post_id, c.id as campaign_id, c.name as campaign_name
+        FROM campaign_posts cp
+        JOIN campaigns c ON c.id = cp.campaign_id
+        WHERE cp.post_id IN (${placeholders})
+        ORDER BY c.created_at
+    `).all(...postIds) as Array<{ post_id: string; campaign_id: string; campaign_name: string }>;
+
+    const campaignMap = new Map<string, CampaignRef[]>();
+    for (const ref of campaignRefs) {
+        const arr = campaignMap.get(ref.post_id) ?? [];
+        arr.push({ id: ref.campaign_id, name: ref.campaign_name });
+        campaignMap.set(ref.post_id, arr);
+    }
+
+    return rows.map((row) => {
+        const post = rowToPost(row);
+        return { ...post, campaigns: campaignMap.get(post.id) ?? [] };
+    });
+}
+
+// ─── Library Posts (standalone generation, saved with source='library') ──
 
 export function saveLibraryPosts(posts: GeneratedLibraryPost[]): SocialPost[] {
     const db = getDb();
@@ -624,6 +840,7 @@ export function saveLibraryPosts(posts: GeneratedLibraryPost[]): SocialPost[] {
                 status: 'pending_review',
                 imageStatus: 'needed',
                 sanitySyncStatus: 'pending',
+                campaigns: [],
                 createdAt: now,
             });
         }
@@ -631,71 +848,6 @@ export function saveLibraryPosts(posts: GeneratedLibraryPost[]): SocialPost[] {
 
     insertAll(posts);
     return saved;
-}
-
-export function getLibraryPosts(filters: { serviceId?: string; status?: PostStatus; variantTag?: VariantTag } = {}): SocialPost[] {
-    const db = getDb();
-    const conditions = ["source = 'library'"];
-    const params: unknown[] = [];
-
-    if (filters.serviceId) {
-        conditions.push('service_id = ?');
-        params.push(filters.serviceId);
-    }
-    if (filters.status) {
-        conditions.push('status = ?');
-        params.push(filters.status);
-    }
-    if (filters.variantTag) {
-        conditions.push('variant_tag = ?');
-        params.push(filters.variantTag);
-    }
-
-    const rows = db
-        .prepare(`SELECT * FROM social_posts WHERE ${conditions.join(' AND ')} ORDER BY created_at DESC`)
-        .all(...params) as Array<Record<string, unknown>>;
-
-    return rows.map(rowToPost);
-}
-
-export function scheduleLibraryPost(postId: string, scheduledFor: string): void {
-    const db = getDb();
-    db.prepare(`UPDATE social_posts SET scheduled_for = ? WHERE id = ? AND source = 'library'`).run(
-        scheduledFor,
-        postId,
-    );
-}
-
-export function markLibraryPostUsed(postId: string): void {
-    const db = getDb();
-    db.prepare(`UPDATE social_posts SET status = 'used', published_at = ? WHERE id = ? AND source = 'library'`).run(
-        new Date().toISOString(),
-        postId,
-    );
-}
-
-export function reviveLibraryPost(postId: string): SocialPost | null {
-    const db = getDb();
-    const now = new Date().toISOString();
-    const newId = randomUUID();
-
-    // Clone the original post as a fresh draft, clearing schedule/publish state
-    db.prepare(`
-        INSERT INTO social_posts
-            (id, source, service_id, variant_tag, platform, post_type, content_pillar,
-             copy, image_direction, image_url, image_status, hashtags, call_to_action,
-             status, created_at)
-        SELECT
-            ?, source, service_id, variant_tag, platform, post_type, content_pillar,
-            copy, image_direction, image_url,
-            CASE WHEN image_url IS NOT NULL AND image_url != '' THEN 'draft' ELSE 'needed' END,
-            hashtags, call_to_action,
-            'pending_review', ?
-        FROM social_posts
-        WHERE id = ? AND source = 'library'
-    `).run(newId, now, postId);
-
-    return getPostById(newId);
 }
 
 // ─── Row mappers ──────────────────────────────────────────────────────────
@@ -721,7 +873,6 @@ function rowToCampaign(row: Record<string, unknown>, postRows: Array<Record<stri
 function rowToPost(row: Record<string, unknown>): SocialPost {
     return {
         id: row.id as string,
-        campaignId: (row.campaign_id as string | null) ?? undefined,
         source: ((row.source as string | null) ?? 'campaign') as PostSource,
         serviceId: (row.service_id as string | null) ?? undefined,
         variantTag: (row.variant_tag as VariantTag | null) ?? undefined,
@@ -746,5 +897,6 @@ function rowToPost(row: Record<string, unknown>): SocialPost {
         rejectionReason: row.rejection_reason as string | undefined,
         createdAt: row.created_at as string,
         publishedAt: row.published_at as string | undefined,
+        campaigns: [],
     };
 }

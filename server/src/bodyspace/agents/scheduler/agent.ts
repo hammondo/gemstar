@@ -117,7 +117,7 @@ export class SchedulerAgent {
                 headers: this.headers,
                 body: JSON.stringify(body),
             },
-            { system: 'postiz', operation: 'create_post', postId: post.id, campaignId: post.campaignId }
+            { system: 'postiz', operation: 'create_post', postId: post.id }
         );
 
         if (!response.ok) {

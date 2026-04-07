@@ -4,9 +4,14 @@ import { makeApp } from './helpers.js';
 import { CAMPAIGN, POST, POST_WITH_IMAGE } from './fixtures.js';
 
 vi.mock('../bodyspace/db.js', () => ({
+    getAllPosts: vi.fn().mockReturnValue([]),
     getCampaignById: vi.fn(),
     getCampaignsByStatus: vi.fn().mockReturnValue([]),
     getPostById: vi.fn(),
+    getPostCampaigns: vi.fn().mockReturnValue([]),
+    clonePost: vi.fn(),
+    schedulePost: vi.fn(),
+    addPostToCampaign: vi.fn(),
     updatePostCopy: vi.fn(),
     updatePostImage: vi.fn(),
     updatePostSanitySync: vi.fn(),
@@ -20,14 +25,13 @@ vi.mock('../bodyspace/db.js', () => ({
     saveAvailabilitySignals: vi.fn(),
 }));
 
-import { getCampaignsByStatus, getPostById } from '../bodyspace/db.js';
+import { getPostById, getPostCampaigns } from '../bodyspace/db.js';
 
 const app = makeApp();
 
 beforeEach(() => {
     vi.mocked(getPostById).mockReturnValue(POST);
-    // Make findCampaignByPostId work: getAllCampaigns calls getCampaignsByStatus for each status
-    vi.mocked(getCampaignsByStatus).mockReturnValue([CAMPAIGN]);
+    vi.mocked(getPostCampaigns).mockReturnValue([{ id: 'cmp-001', name: 'Autumn Wellness' }]);
 });
 
 describe('Post routes', () => {
@@ -115,8 +119,6 @@ describe('Post routes', () => {
 
     describe('POST /api/bodyspace/posts/:id/image/approve', () => {
         it('approves the image draft', async () => {
-            const campaignWithImage = { ...CAMPAIGN, posts: [POST_WITH_IMAGE] };
-            vi.mocked(getCampaignsByStatus).mockReturnValue([campaignWithImage]);
             vi.mocked(getPostById).mockReturnValue(POST_WITH_IMAGE);
             const res = await request(app).post(`/api/bodyspace/posts/${POST_WITH_IMAGE.id}/image/approve`);
             expect(res.status).toBe(200);
@@ -133,7 +135,8 @@ describe('Post routes', () => {
     });
 
     describe('POST /api/bodyspace/posts/:id/image/regenerate', () => {
-        it('returns 400 when campaignId is missing', async () => {
+        it('returns 400 when post has no campaign and no campaignId provided', async () => {
+            vi.mocked(getPostCampaigns).mockReturnValueOnce([]);
             const res = await request(app)
                 .post(`/api/bodyspace/posts/${POST.id}/image/regenerate`)
                 .send({});
