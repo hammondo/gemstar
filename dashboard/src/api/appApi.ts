@@ -39,7 +39,7 @@ export interface CampaignRef {
 
 export interface SocialPost {
     id: string;
-    campaigns: CampaignRef[];
+    campaigns?: CampaignRef[];
     source?: PostSource;
     serviceId?: string;
     variantTag?: VariantTag;
