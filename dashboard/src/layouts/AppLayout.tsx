@@ -1,5 +1,14 @@
-import { Activity, BarChart3, BookOpen, ClipboardList, FileText, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
-import { Activity, BarChart3, BookOpen, Image, LayoutDashboard, LogOut, Megaphone, Settings } from 'lucide-react';
+import {
+    Activity,
+    BarChart3,
+    BookOpen,
+    ClipboardList,
+    Image,
+    LayoutDashboard,
+    LogOut,
+    Megaphone,
+    Settings,
+} from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import type { AuthUser } from '../api/appApi';
 import logo from '../assets/logo.png';

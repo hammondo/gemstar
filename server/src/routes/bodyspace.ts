@@ -1,8 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import express, { Router } from 'express';
-import multer from 'multer';
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { resolve } from 'node:path';
 import { CampaignPlannerAgent } from '../bodyspace/agents/campaign-planner/agent.js';
 import { FreshaWatcherAgent } from '../bodyspace/agents/fresha-watcher/agent.js';
@@ -27,7 +25,7 @@ import {
     updatePostSanitySync,
     updateTrendsBrief,
 } from '../bodyspace/db.js';
-import { BodyspaceOrchestrator } from '../bodyspace/orchestrator.js';
+import orchestrator from '../bodyspace/orchestrator.js';
 import { clearMetaCache, getMetaAnalytics } from '../bodyspace/services/meta-analytics.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
 import { runSubjectInpainting } from '../bodyspace/services/subject-inpainting.js';
@@ -40,13 +38,26 @@ import {
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 
-import { Router } from 'express';
+import { IncomingMessage, ServerResponse } from 'node:http';
 import agentsRouter from './agents.js';
 import analyticsRouter from './analytics.js';
-import campaignsRouter from './campaigns.js';
+import campaignsRouter, { upload } from './campaigns.js';
 import libraryRouter from './library.js';
 import settingsRouter from './settings.js';
 import wizardRouter from './wizard.js';
+
+// ── SSE helper ────────────────────────────────────────────────────────────────
+// Sets up an SSE response and returns a `send` helper + teardown.
+// Sends `: ping` comments every 25s so proxies don't close idle connections.
+function setupSSE(req: IncomingMessage, res: ServerResponse) {
+    req.setTimeout(0);
+    res.socket?.setTimeout(0);
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    });
 
     let closed = false;
     const keepalive = setInterval(() => {

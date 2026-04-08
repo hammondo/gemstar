@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
+    "lint:watch": "tsc --noEmit --watch",
     "dump:openapi": "tsx src/scripts/dump-openapi.ts",
     "regen:client": "npm run dump:openapi && npm run gen:api --prefix ../dashboard"
   },
