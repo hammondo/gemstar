@@ -159,6 +159,27 @@ const BlogSync = registry.register(
 
 const ErrorResponse = z.object({ ok: z.literal(false), error: z.string() }).openapi('ErrorResponse');
 
+const AuditLogEntry = registry.register(
+    'AuditLogEntry',
+    z
+        .object({
+            id: z.string(),
+            agentName: z.string().openapi({ example: 'campaign-planner' }),
+            trigger: z.enum(['cron', 'api', 'background']).openapi({ description: 'What initiated the agent run' }),
+            userId: z.string().nullable(),
+            userName: z.string().nullable(),
+            userEmail: z.string().nullable(),
+            startedAt: z.string().openapi({ example: '2025-06-01T09:00:00.000Z' }),
+            completedAt: z.string().nullable(),
+            durationMs: z.number().int().nullable(),
+            status: z.enum(['running', 'success', 'error']),
+            input: z.unknown().nullable(),
+            output: z.unknown().nullable(),
+            error: z.string().nullable(),
+        })
+        .openapi('AuditLogEntry'),
+);
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 // Health
@@ -1052,6 +1073,39 @@ registry.registerPath({
     },
 });
 
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+registry.registerPath({
+    method: 'get',
+    path: '/api/bodyspace/audit',
+    tags: ['Audit'],
+    summary: 'Query agent invocation audit log',
+    request: {
+        query: z.object({
+            agentName: z.string().optional(),
+            status: z.enum(['running', 'success', 'error']).optional(),
+            trigger: z.enum(['cron', 'api', 'background']).optional(),
+            search: z.string().optional(),
+            limit: z.string().optional().openapi({ description: 'Max entries to return (default 50)' }),
+            offset: z.string().optional().openapi({ description: 'Pagination offset (default 0)' }),
+        }),
+    },
+    responses: {
+        200: {
+            description: 'Paginated audit log entries',
+            content: {
+                'application/json': {
+                    schema: z.object({
+                        ok: z.literal(true),
+                        entries: z.array(AuditLogEntry),
+                        total: z.number().int(),
+                    }),
+                },
+            },
+        },
+    },
+});
+
 // ─── Spec generator ──────────────────────────────────────────────────────────
 
 export function buildOpenApiSpec() {
@@ -1076,6 +1130,7 @@ export function buildOpenApiSpec() {
             { name: 'Settings', description: 'Persistent settings store' },
             { name: 'Wizard', description: 'Guided campaign and monitor setup flows' },
             { name: 'Agents', description: 'Manual agent triggers' },
+            { name: 'Audit', description: 'Agent invocation audit log' },
         ],
     });
 }

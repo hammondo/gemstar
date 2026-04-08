@@ -2,9 +2,9 @@ import { Check, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    type ServiceAvailability,
     type Campaign,
     type MonitorProgress,
+    type ServiceAvailability,
     type ServiceInfo,
     type TrendsBrief,
     getLatestTrends,
@@ -26,7 +26,10 @@ import ServiceSelector from '../components/ServiceSelector';
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 function stripCites(text: string): string {
-    return text.replace(/<\/?cite[^>]*>/g, '').replace(/\s{2,}/g, ' ').trim();
+    return text
+        .replace(/<\/?cite[^>]*>/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -35,7 +38,7 @@ type RunState = 'idle' | 'running' | 'done' | 'error';
 
 // ── Stepper ───────────────────────────────────────────────────────────────────
 
-const STEPS = ['Research', 'Plan', 'Review'];
+const STEPS = ['Focus', 'Research', 'Plan'];
 
 function Stepper({ current }: { current: 1 | 2 | 3 }) {
     return (
@@ -101,7 +104,251 @@ function ProgressLog({ entries, state }: { entries: string[]; state: RunState })
     );
 }
 
-// ── Step 1 — Monitor ──────────────────────────────────────────────────────────
+// ── Step 1 — Focus ────────────────────────────────────────────────────────────
+
+const SIGNAL_ORDER: Record<string, number> = { push: 0, hold: 1, pause: 2 };
+
+function FocusStep({ onComplete }: { onComplete: (selected: Set<string>) => void }) {
+    const [services, setServices] = useState<ServiceInfo[]>([]);
+    const [signals, setSignals] = useState<Record<string, ServiceAvailability>>({});
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        Promise.all([getServices(), getSignals(), getSelectedCampaignServices()])
+            .then(([{ services: s }, { signals: sig }, { services: saved }]) => {
+                setServices(s);
+                setSignals(sig);
+                // Pre-select saved preferences; fall back to push services
+                if (saved.length > 0) {
+                    setSelected(new Set(saved));
+                } else {
+                    const pushIds = Object.values(sig)
+                        .filter((a) => a.signal === 'push')
+                        .map((a) => a.serviceId);
+                    setSelected(new Set(pushIds));
+                }
+            })
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    }, []);
+
+    function toggle(id: string) {
+        setSelected((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }
+
+    async function handleRefreshFresha() {
+        setRefreshing(true);
+        try {
+            await runFreshaWatcher();
+            const { signals: sig } = await getSignals();
+            setSignals(sig);
+        } catch {
+            /* non-fatal */
+        } finally {
+            setRefreshing(false);
+        }
+    }
+
+    async function handleContinue() {
+        setSaving(true);
+        try {
+            await saveSelectedCampaignServices([...selected]);
+        } catch {
+            /* non-fatal */
+        } finally {
+            setSaving(false);
+        }
+        onComplete(selected);
+    }
+
+    const sorted = [...services].sort((a, b) => {
+        const sa = SIGNAL_ORDER[signals[a.id]?.signal ?? 'hold'] ?? 1;
+        const sb = SIGNAL_ORDER[signals[b.id]?.signal ?? 'hold'] ?? 1;
+        return sa !== sb ? sa - sb : a.name.localeCompare(b.name);
+    });
+
+    const pushServices = services.filter((s) => signals[s.id]?.signal === 'push');
+    const pushNames = pushServices.map((s) => s.name);
+    const recommendationText =
+        pushNames.length > 0
+            ? `${pushNames.length === 1 ? pushNames[0] : pushNames.slice(0, -1).join(', ') + ' and ' + pushNames.at(-1)} ${pushNames.length === 1 ? 'has' : 'have'} low bookings this week — push recommended.`
+            : null;
+
+    return (
+        <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
+            <p className="text-muted mb-1 text-xs font-semibold tracking-wide uppercase">Step 1 · Campaign Focus</p>
+            <p className="text-charcoal mb-5 text-sm">
+                Choose which services to prioritise in this campaign. Fresha availability signals are shown to guide
+                your selection.
+            </p>
+
+            {/* AI recommendation callout */}
+            {!loading && recommendationText && (
+                <div className="mb-5 flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+                    <span className="mt-px shrink-0 text-base leading-none">💡</span>
+                    <p className="text-sm text-teal-800">
+                        <span className="font-semibold">{recommendationText}</span>
+                    </p>
+                </div>
+            )}
+
+            {/* Service list */}
+            <div className="mb-5">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-muted text-xs font-medium">Services to promote</p>
+                    <div className="flex shrink-0 items-center gap-2">
+                        {pushServices.length > 0 && (
+                            <button
+                                onClick={() => setSelected(new Set(pushServices.map((s) => s.id)))}
+                                disabled={loading}
+                                className="border-warm-200 text-muted rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-40"
+                            >
+                                Select push
+                            </button>
+                        )}
+                        <button
+                            onClick={() => setSelected(new Set(services.map((s) => s.id)))}
+                            disabled={loading}
+                            className="border-warm-200 text-muted rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-40"
+                        >
+                            Select all
+                        </button>
+                        <button
+                            onClick={() => setSelected(new Set())}
+                            disabled={loading || selected.size === 0}
+                            className="border-warm-200 text-muted rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-red-300 hover:text-red-600 disabled:opacity-40"
+                        >
+                            Clear
+                        </button>
+                        <button
+                            onClick={() => void handleRefreshFresha()}
+                            disabled={refreshing || loading}
+                            className="border-warm-200 text-muted flex items-center gap-1.5 rounded-lg border bg-white px-2.5 py-1 text-[11px] font-medium transition hover:border-teal-300 hover:text-teal-700 disabled:opacity-40"
+                        >
+                            {refreshing ? (
+                                <>
+                                    <span className="h-2.5 w-2.5 animate-spin rounded-full border border-teal-400 border-t-transparent" />
+                                    Refreshing…
+                                </>
+                            ) : (
+                                'Refresh Fresha'
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                {loading ? (
+                    <div className="bg-warm-100 h-40 w-full animate-pulse rounded-xl" />
+                ) : (
+                    <ul className="border-warm-200 divide-warm-100 divide-y overflow-hidden rounded-xl border">
+                        {sorted.map((svc) => {
+                            const sig = signals[svc.id];
+                            const booked =
+                                sig?.bookedSlots ??
+                                (sig?.totalSlots != null ? sig.totalSlots - sig.availableSlots : null);
+                            const pct =
+                                sig?.totalSlots != null && booked != null
+                                    ? Math.round((booked / sig.totalSlots) * 100)
+                                    : null;
+                            const barColor =
+                                sig?.signal === 'push'
+                                    ? 'bg-teal-500'
+                                    : sig?.signal === 'hold'
+                                      ? 'bg-amber-400'
+                                      : 'bg-red-400';
+                            const isSelected = selected.has(svc.id);
+                            return (
+                                <li key={svc.id}>
+                                    <label
+                                        className={`flex cursor-pointer items-start gap-4 px-5 py-3.5 transition-colors ${isSelected ? 'bg-teal-50' : 'hover:bg-warm-50'}`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => toggle(svc.id)}
+                                            className="mt-0.5 h-4 w-4 shrink-0 accent-teal-600"
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <p
+                                                    className={`text-sm font-medium ${isSelected ? 'text-teal-800' : 'text-charcoal'}`}
+                                                >
+                                                    {svc.name}
+                                                </p>
+                                                {sig && (
+                                                    <span
+                                                        className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                                                            sig.signal === 'push'
+                                                                ? 'bg-teal-400/20 text-teal-700'
+                                                                : sig.signal === 'pause'
+                                                                  ? 'bg-red-100 text-red-700'
+                                                                  : 'bg-amber-100 text-amber-800'
+                                                        }`}
+                                                    >
+                                                        {sig.signal === 'push'
+                                                            ? 'Push'
+                                                            : sig.signal === 'pause'
+                                                              ? 'Pause'
+                                                              : 'Hold'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {pct !== null && sig?.totalSlots != null && (
+                                                <div className="mt-2">
+                                                    <div className="bg-warm-100 h-1.5 w-full overflow-hidden rounded-full">
+                                                        <div
+                                                            className={`h-full rounded-full transition-all ${barColor}`}
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                    <p className="text-muted mt-1 text-xs">
+                                                        {booked}/{sig.totalSlots} booked
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {pct === null && sig && (
+                                                <p className="text-muted mt-1 text-xs">
+                                                    {sig.availableSlots} available
+                                                </p>
+                                            )}
+                                            {!sig && <p className="text-muted mt-1 text-xs italic">No signal data</p>}
+                                        </div>
+                                    </label>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </div>
+
+            <div className="flex items-center justify-between">
+                <button
+                    onClick={() => onComplete(new Set())}
+                    className="text-muted hover:text-charcoal text-sm font-semibold transition"
+                >
+                    Skip →
+                </button>
+                <button
+                    onClick={() => void handleContinue()}
+                    disabled={loading || saving}
+                    className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
+                >
+                    {saving ? 'Saving…' : 'Continue to Research →'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+// ── Step 2 — Monitor ──────────────────────────────────────────────────────────
 
 function BriefCard({ brief }: { brief: TrendsBrief | null }) {
     const [expanded, setExpanded] = useState(false);
@@ -202,7 +449,11 @@ function EditableBriefPanel({ brief, onSaved }: { brief: TrendsBrief; onSaved: (
 
     const weekLabel = (() => {
         try {
-            return new Date(brief.weekOf).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' });
+            return new Date(brief.weekOf).toLocaleDateString('en-AU', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+            });
         } catch {
             return brief.weekOf;
         }
@@ -214,7 +465,9 @@ function EditableBriefPanel({ brief, onSaved }: { brief: TrendsBrief; onSaved: (
             <div className="space-y-3">
                 {BRIEF_FIELDS.map(({ key, label, rows }) => (
                     <div key={key}>
-                        <label className="text-muted mb-1 block text-[11px] font-semibold uppercase tracking-wide">{label}</label>
+                        <label className="text-muted mb-1 block text-[11px] font-semibold tracking-wide uppercase">
+                            {label}
+                        </label>
                         <textarea
                             value={fields[key as keyof typeof fields]}
                             onChange={(e) => setFields((prev) => ({ ...prev, [key]: e.target.value }))}
@@ -224,9 +477,7 @@ function EditableBriefPanel({ brief, onSaved }: { brief: TrendsBrief; onSaved: (
                     </div>
                 ))}
             </div>
-            {saveError && (
-                <p className="mt-2 text-xs text-red-600">{saveError}</p>
-            )}
+            {saveError && <p className="mt-2 text-xs text-red-600">{saveError}</p>}
             <button
                 onClick={() => void handleSave()}
                 disabled={saving}
@@ -494,14 +745,14 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
                                 disabled={state === 'running' || termsLoading}
                                 className="rounded-lg bg-teal-700 px-5 py-2 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50"
                             >
-                                {state === 'running' ? 'Running…' : 'Run Research'}
+                                {state === 'running' ? 'Running…' : 'Generate new Research Brief'}
                             </button>
                             <button
                                 onClick={onComplete}
                                 disabled={state === 'running'}
-                                className="text-muted hover:text-charcoal text-sm font-semibold transition disabled:opacity-40"
+                                className="text-muted hover:text-charcoal rounded-lg border border-teal-700 px-4 py-2 text-sm font-semibold transition disabled:opacity-40"
                             >
-                                Skip →
+                                Continue with current brief →
                             </button>
                         </>
                     )}
@@ -512,18 +763,20 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
             <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
                 {newBrief ? (
                     <>
-                        <p className="text-muted mb-3 text-xs font-semibold uppercase tracking-wide">New Brief</p>
+                        <p className="text-muted mb-3 text-xs font-semibold tracking-wide uppercase">New Brief</p>
                         <EditableBriefPanel brief={newBrief} onSaved={(updated) => setNewBrief(updated)} />
                         {priorBrief && priorBrief.id !== newBrief.id && (
-                            <div className="mt-5 border-t border-warm-200 pt-5">
-                                <p className="text-muted mb-3 text-xs font-semibold uppercase tracking-wide">Previous Brief</p>
+                            <div className="border-warm-200 mt-5 border-t pt-5">
+                                <p className="text-muted mb-3 text-xs font-semibold tracking-wide uppercase">
+                                    Previous Brief
+                                </p>
                                 <BriefCard brief={priorBrief} />
                             </div>
                         )}
                     </>
                 ) : (
                     <>
-                        <p className="text-muted mb-3 text-xs font-semibold uppercase tracking-wide">Current Brief</p>
+                        <p className="text-muted mb-3 text-xs font-semibold tracking-wide uppercase">Current Brief</p>
                         {briefLoading ? (
                             <div className="space-y-2">
                                 <div className="bg-warm-100 h-3 w-3/4 animate-pulse rounded" />
@@ -540,13 +793,19 @@ function MonitorStep({ onComplete }: { onComplete: () => void }) {
     );
 }
 
-// ── Step 2 — Campaign Planner ─────────────────────────────────────────────────
+// ── Step 3 — Campaign Planner ─────────────────────────────────────────────────
 
-function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void }) {
+function CampaignStep({
+    initialServices,
+    onComplete,
+}: {
+    initialServices?: Set<string>;
+    onComplete: (campaign: Campaign) => void;
+}) {
     const [ownerBrief, setOwnerBrief] = useState('');
     const [services, setServices] = useState<ServiceInfo[]>([]);
     const [servicesLoading, setServicesLoading] = useState(true);
-    const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
+    const [selectedServices, setSelectedServices] = useState<Set<string>>(initialServices ?? new Set());
     const [signals, setSignals] = useState<Record<string, ServiceAvailability>>({});
     const [refreshing, setRefreshing] = useState(false);
     const [state, setState] = useState<RunState>('idle');
@@ -554,19 +813,20 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
     const [campaign, setCampaign] = useState<Campaign | null>(null);
 
     useEffect(() => {
-        Promise.all([
-            getServices(),
-            getSelectedCampaignServices(),
-            getSignals(),
-        ])
-            .then(([{ services: s }, { services: saved }, { signals: sig }]) => {
+        const loadSelected =
+            initialServices && initialServices.size > 0
+                ? Promise.resolve(initialServices)
+                : getSelectedCampaignServices().then(({ services: s }) => new Set<string>(s));
+
+        Promise.all([getServices(), loadSelected, getSignals()])
+            .then(([{ services: s }, savedSet, { signals: sig }]) => {
                 setServices(s);
-                setSelectedServices(new Set(saved));
+                setSelectedServices(savedSet);
                 setSignals(sig);
             })
             .catch(() => {})
             .finally(() => setServicesLoading(false));
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     function toggleService(id: string) {
         setSelectedServices((prev) => {
@@ -616,7 +876,7 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
 
     return (
         <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
-            <p className="text-muted mb-1 text-xs font-semibold tracking-wide uppercase">Step 2 · Campaign Plan</p>
+            <p className="text-muted mb-1 text-xs font-semibold tracking-wide uppercase">Step 3 · Campaign Plan</p>
             <p className="text-charcoal mb-5 text-sm">
                 Select the services to promote in this campaign, then add any additional guidance below.
             </p>
@@ -722,9 +982,15 @@ function CampaignStep({ onComplete }: { onComplete: (campaign: Campaign) => void
 export default function NewCampaignWizardPage() {
     const navigate = useNavigate();
     const [step, setStep] = useState<1 | 2 | 3>(1);
+    const [focusedServices, setFocusedServices] = useState<Set<string>>(new Set());
+
+    function handleFocusDone(selected: Set<string>) {
+        setFocusedServices(selected);
+        setStep(2);
+    }
 
     function handleMonitorDone() {
-        setStep(2);
+        setStep(3);
     }
 
     function handleCampaignDone(campaign: Campaign) {
@@ -733,13 +999,14 @@ export default function NewCampaignWizardPage() {
 
     return (
         <>
-            <PageHeader title="New Campaign" subtitle="Research trends, then generate a campaign plan" />
+            <PageHeader title="New Campaign" subtitle="Set your focus, research trends, then generate a plan" />
 
-            <div className={`mx-auto`}>
+            <div className="mx-auto">
                 <Stepper current={step} />
 
-                {step === 1 && <MonitorStep onComplete={handleMonitorDone} />}
-                {step === 2 && <CampaignStep onComplete={handleCampaignDone} />}
+                {step === 1 && <FocusStep onComplete={handleFocusDone} />}
+                {step === 2 && <MonitorStep onComplete={handleMonitorDone} />}
+                {step === 3 && <CampaignStep initialServices={focusedServices} onComplete={handleCampaignDone} />}
             </div>
         </>
     );

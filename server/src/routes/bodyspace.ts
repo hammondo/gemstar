@@ -40,18 +40,13 @@ import {
 import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 
-// ── SSE helper ────────────────────────────────────────────────────────────────
-// Sets up an SSE response and returns a `send` helper + teardown.
-// Sends `: ping` comments every 25s so proxies don't close idle connections.
-function setupSSE(req: IncomingMessage, res: ServerResponse) {
-    req.setTimeout(0);
-    res.socket?.setTimeout(0);
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no',
-    });
+import { Router } from 'express';
+import agentsRouter from './agents.js';
+import analyticsRouter from './analytics.js';
+import campaignsRouter from './campaigns.js';
+import libraryRouter from './library.js';
+import settingsRouter from './settings.js';
+import wizardRouter from './wizard.js';
 
     let closed = false;
     const keepalive = setInterval(() => {
@@ -76,23 +71,13 @@ function setupSSE(req: IncomingMessage, res: ServerResponse) {
 }
 
 const bodyspaceRouter = Router();
-const upload = multer({
-    dest: resolve(settings.dataDir, 'uploads'),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-    fileFilter: (_req, file, cb) => {
-        if (file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed'));
-        }
-    },
-});
-const orchestrator = new BodyspaceOrchestrator();
 
-// Serve locally stored generated images
-const imagesDir = resolve(settings.dataDir, 'images');
-mkdirSync(imagesDir, { recursive: true });
-bodyspaceRouter.use('/images', express.static(imagesDir));
+bodyspaceRouter.use(analyticsRouter);
+bodyspaceRouter.use(campaignsRouter);
+bodyspaceRouter.use(agentsRouter);
+bodyspaceRouter.use(libraryRouter);
+bodyspaceRouter.use(settingsRouter);
+bodyspaceRouter.use(wizardRouter);
 
 const campaignStatuses: CampaignStatus[] = [
     'draft',

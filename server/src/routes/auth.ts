@@ -35,7 +35,7 @@ authRouter.get('/login', async (_req, res) => {
 authRouter.get('/callback', async (req, res) => {
     const { code } = req.query;
     if (typeof code !== 'string') {
-        res.status(400).send('Missing authorization code');
+        res.status(400).json({ ok: false, error: 'Missing authorization code' });
         return;
     }
     try {
@@ -51,7 +51,7 @@ authRouter.get('/callback', async (req, res) => {
         };
         res.redirect(settings.dashboardBaseUrl);
     } catch (err) {
-        res.status(500).send(`Authentication failed: ${String(err)}`);
+        res.status(500).json({ ok: false, error: `Authentication failed: ${String(err)}` });
     }
 });
 

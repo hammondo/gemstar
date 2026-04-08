@@ -12,6 +12,7 @@ export type AuthUser = components['schemas']['AuthUser'];
 export type ServiceInfo = components['schemas']['ServiceInfo'];
 export type BlogSync = components['schemas']['BlogSync'];
 export type AvailabilitySignal = components['schemas']['AvailabilitySignal'];
+export type AuditLogEntry = components['schemas']['AuditLogEntry'];
 export type FbInsightRow = { [key: string]: string | number };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -386,4 +387,27 @@ export function streamSSEPostTest(
     callbacks: SSECallbacks<{ message: string; count: number }>
 ): () => void {
     return streamSSEPost('/api/bodyspace/test/sse-post', { seconds }, callbacks);
+}
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+
+export interface AuditLogFilters {
+    agentName?: string;
+    status?: 'running' | 'success' | 'error';
+    trigger?: 'cron' | 'api' | 'background';
+    search?: string;
+    limit?: number;
+    offset?: number;
+}
+
+export async function getAuditLog(filters: AuditLogFilters = {}): Promise<{ entries: AuditLogEntry[]; total: number }> {
+    const params = new URLSearchParams();
+    if (filters.agentName) params.set('agentName', filters.agentName);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.trigger) params.set('trigger', filters.trigger);
+    if (filters.search) params.set('search', filters.search);
+    if (filters.limit != null) params.set('limit', String(filters.limit));
+    if (filters.offset != null) params.set('offset', String(filters.offset));
+    const qs = params.toString();
+    return fetchJson(`/api/bodyspace/audit${qs ? `?${qs}` : ''}`);
 }

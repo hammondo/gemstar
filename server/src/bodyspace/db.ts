@@ -107,6 +107,25 @@ CREATE INDEX IF NOT EXISTS idx_posts_source ON social_posts(source);
 CREATE INDEX IF NOT EXISTS idx_posts_service ON social_posts(service_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_posts_campaign ON campaign_posts(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_posts_post ON campaign_posts(post_id);
+
+CREATE TABLE IF NOT EXISTS agent_audit_log (
+  id TEXT PRIMARY KEY,
+  agent_name TEXT NOT NULL,
+  trigger TEXT NOT NULL,
+  user_id TEXT,
+  user_name TEXT,
+  user_email TEXT,
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  duration_ms INTEGER,
+  status TEXT NOT NULL DEFAULT 'running',
+  input TEXT,
+  output TEXT,
+  error TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_started ON agent_audit_log(started_at);
+CREATE INDEX IF NOT EXISTS idx_audit_agent ON agent_audit_log(agent_name);
 `;
 
 // ─── DB singleton ─────────────────────────────────────────────────────────
@@ -347,6 +366,7 @@ function runMigrations(db: Database.Database): void {
 // ─── Typed helpers ────────────────────────────────────────────────────────
 
 import { randomUUID } from 'crypto';
+import { CAMPAIGN_STATUSES } from './types.js';
 import type {
     Campaign,
     CampaignRef,
@@ -600,6 +620,10 @@ export function getCampaignsByStatus(status: CampaignStatus): Campaign[] {
             .all(row.id as string) as Array<Record<string, unknown>>;
         return rowToCampaign(row, posts);
     });
+}
+
+export function getAllCampaigns(): Campaign[] {
+    return CAMPAIGN_STATUSES.flatMap((status) => getCampaignsByStatus(status));
 }
 
 export function updateCampaignStatus(id: string, status: CampaignStatus, extra: Partial<Campaign> = {}): void {
@@ -899,4 +923,130 @@ function rowToPost(row: Record<string, unknown>): SocialPost {
         publishedAt: row.published_at as string | undefined,
         campaigns: [],
     };
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+    id: string;
+    agentName: string;
+    trigger: string;
+    userId: string | null;
+    userName: string | null;
+    userEmail: string | null;
+    startedAt: string;
+    completedAt: string | null;
+    durationMs: number | null;
+    status: string;
+    input: unknown;
+    output: unknown;
+    error: string | null;
+}
+
+export function insertAuditEntry(entry: {
+    id: string;
+    agentName: string;
+    trigger: string;
+    userId: string | null;
+    userName: string | null;
+    userEmail: string | null;
+    startedAt: string;
+    input: unknown;
+}): void {
+    const db = getDb();
+    db.prepare(`
+        INSERT INTO agent_audit_log
+            (id, agent_name, trigger, user_id, user_name, user_email, started_at, status, input)
+        VALUES (?,?,?,?,?,?,?,'running',?)
+    `).run(
+        entry.id,
+        entry.agentName,
+        entry.trigger,
+        entry.userId,
+        entry.userName,
+        entry.userEmail,
+        entry.startedAt,
+        entry.input != null ? j(entry.input) : null,
+    );
+}
+
+export function completeAuditEntry(id: string, durationMs: number, output: unknown): void {
+    const db = getDb();
+    const completedAt = new Date().toISOString();
+    db.prepare(`
+        UPDATE agent_audit_log
+        SET status = 'success', completed_at = ?, duration_ms = ?, output = ?
+        WHERE id = ?
+    `).run(completedAt, durationMs, output != null ? j(output) : null, id);
+}
+
+export function failAuditEntry(id: string, durationMs: number, error: string): void {
+    const db = getDb();
+    const completedAt = new Date().toISOString();
+    db.prepare(`
+        UPDATE agent_audit_log
+        SET status = 'error', completed_at = ?, duration_ms = ?, error = ?
+        WHERE id = ?
+    `).run(completedAt, durationMs, error, id);
+}
+
+export function queryAuditLogs(filters: {
+    agentName?: string;
+    status?: string;
+    trigger?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+}): { entries: AuditLogEntry[]; total: number } {
+    const db = getDb();
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (filters.agentName) {
+        conditions.push('agent_name = ?');
+        params.push(filters.agentName);
+    }
+    if (filters.status) {
+        conditions.push('status = ?');
+        params.push(filters.status);
+    }
+    if (filters.trigger) {
+        conditions.push('trigger = ?');
+        params.push(filters.trigger);
+    }
+    if (filters.search) {
+        const like = `%${filters.search}%`;
+        conditions.push('(user_name LIKE ? OR user_email LIKE ? OR agent_name LIKE ? OR error LIKE ?)');
+        params.push(like, like, like, like);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+    const limit = filters.limit ?? 50;
+    const offset = filters.offset ?? 0;
+
+    const total = (
+        db.prepare(`SELECT COUNT(*) as n FROM agent_audit_log ${where}`).get(...params) as { n: number }
+    ).n;
+
+    const rows = db
+        .prepare(`SELECT * FROM agent_audit_log ${where} ORDER BY started_at DESC LIMIT ? OFFSET ?`)
+        .all(...params, limit, offset) as Array<Record<string, unknown>>;
+
+    const entries: AuditLogEntry[] = rows.map((row) => ({
+        id: row.id as string,
+        agentName: row.agent_name as string,
+        trigger: row.trigger as string,
+        userId: (row.user_id as string | null) ?? null,
+        userName: (row.user_name as string | null) ?? null,
+        userEmail: (row.user_email as string | null) ?? null,
+        startedAt: row.started_at as string,
+        completedAt: (row.completed_at as string | null) ?? null,
+        durationMs: (row.duration_ms as number | null) ?? null,
+        status: row.status as string,
+        input: p(row.input as string | null),
+        output: p(row.output as string | null),
+        error: (row.error as string | null) ?? null,
+    }));
+
+    return { entries, total };
 }

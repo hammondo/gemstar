@@ -1790,6 +1790,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bodyspace/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Query agent invocation audit log */
+        get: {
+            parameters: {
+                query?: {
+                    agentName?: string;
+                    status?: "running" | "success" | "error";
+                    trigger?: "cron" | "api" | "background";
+                    search?: string;
+                    limit?: string;
+                    offset?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paginated audit log entries */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {boolean} */
+                            ok: true;
+                            entries: components["schemas"]["AuditLogEntry"][];
+                            total: number;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1920,6 +1968,28 @@ export interface components {
             reason?: string;
             documentId?: string;
             slug?: string;
+        };
+        AuditLogEntry: {
+            id: string;
+            /** @example campaign-planner */
+            agentName: string;
+            /**
+             * @description What initiated the agent run
+             * @enum {string}
+             */
+            trigger: "cron" | "api" | "background";
+            userId: string | null;
+            userName: string | null;
+            userEmail: string | null;
+            /** @example 2025-06-01T09:00:00.000Z */
+            startedAt: string;
+            completedAt: string | null;
+            durationMs: number | null;
+            /** @enum {string} */
+            status: "running" | "success" | "error";
+            input?: unknown;
+            output?: unknown;
+            error: string | null;
         };
         ErrorResponse: {
             /** @enum {boolean} */

@@ -6,6 +6,7 @@ import { config } from './config';
 import AppLayout from './layouts/AppLayout';
 import AgentsPage from './pages/AgentsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import AuditLogPage from './pages/AuditLogPage';
 import CampaignDetailPage from './pages/CampaignDetailPage';
 import CampaignsPage from './pages/CampaignsPage';
 import DashboardPage from './pages/DashboardPage';
@@ -93,6 +94,7 @@ export default function App() {
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="inpainting" element={<SubjectInpaintingPage />} />
                 <Route path="sse-test" element={<SSETestPage />} />
+                <Route path="audit" element={<AuditLogPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>

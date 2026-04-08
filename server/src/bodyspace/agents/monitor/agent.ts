@@ -137,17 +137,17 @@ Return ONLY valid JSON matching this exact schema:
                 event: 'outbound.request',
                 system: 'anthropic',
                 operation: 'messages.create',
-                model: 'claude-sonnet-4-20250514',
+                model: settings.monitorModel,
                 promptBytes: Buffer.byteLength(prompt),
             },
             'Outbound request started'
         );
 
         const response = await this.client!.messages.create({
-            model: 'claude-sonnet-4-20250514',
+            model: settings.monitorModel,
             max_tokens: 4000,
             system: SYSTEM_PROMPT,
-            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as never,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] as never,
             messages: [{ role: 'user', content: prompt }],
         });
 
@@ -178,17 +178,17 @@ Return ONLY valid JSON matching this exact schema:
                 event: 'outbound.request',
                 system: 'anthropic',
                 operation: 'messages.stream',
-                model: 'claude-sonnet-4-20250514',
+                model: settings.monitorModel,
                 promptBytes: Buffer.byteLength(prompt),
             },
             'Outbound request started'
         );
 
         const stream = this.client!.messages.stream({
-            model: 'claude-sonnet-4-20250514',
+            model: settings.monitorModel,
             max_tokens: 4000,
             system: SYSTEM_PROMPT,
-            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] as never,
+            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] as never,
             messages: [{ role: 'user', content: prompt }],
         });
 

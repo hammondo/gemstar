@@ -240,15 +240,30 @@ Return ONLY valid JSON:
             'Outbound request started'
         );
 
-        const response = await this.client!.messages.create({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 8000,
-            system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio, 
-a warm holistic wellness studio in Jandakot, Perth, Western Australia. 
+        let response: Anthropic.Message | undefined;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                response = await this.client!.messages.create({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 8000,
+                    system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio,
+a warm holistic wellness studio in Jandakot, Perth, Western Australia.
 Write post copy that sounds genuinely human — warm, grounded, and personal.
 Output ONLY valid JSON, no preamble, no markdown fences.`,
-            messages: [{ role: 'user', content: prompt }],
-        });
+                    messages: [{ role: 'user', content: prompt }],
+                });
+                break;
+            } catch (err) {
+                const isRateLimit = err instanceof Anthropic.RateLimitError;
+                if (isRateLimit && attempt < 3) {
+                    const waitMs = 60_000 * attempt;
+                    this.log.warn({ attempt, waitMs }, 'Rate limit hit — waiting before retry');
+                    await new Promise((r) => setTimeout(r, waitMs));
+                    continue;
+                }
+                throw err;
+            }
+        }
 
         this.log.info(
             {
@@ -256,13 +271,13 @@ Output ONLY valid JSON, no preamble, no markdown fences.`,
                 system: 'anthropic',
                 operation: 'messages.create',
                 durationMs: Date.now() - startedAt,
-                stopReason: response.stop_reason,
+                stopReason: response!.stop_reason,
             },
             'Outbound response received'
         );
 
         let text = '';
-        for (const block of response.content) {
+        for (const block of response!.content) {
             if (block.type === 'text') text += block.text;
         }
 

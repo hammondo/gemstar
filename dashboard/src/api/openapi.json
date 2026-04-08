@@ -45,6 +45,10 @@
     {
       "name": "Agents",
       "description": "Manual agent triggers"
+    },
+    {
+      "name": "Audit",
+      "description": "Agent invocation audit log"
     }
   ],
   "components": {
@@ -438,6 +442,90 @@
         "required": [
           "attempted",
           "synced"
+        ]
+      },
+      "AuditLogEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "agentName": {
+            "type": "string",
+            "example": "campaign-planner"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "cron",
+              "api",
+              "background"
+            ],
+            "description": "What initiated the agent run"
+          },
+          "userId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "userName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "userEmail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "example": "2025-06-01T09:00:00.000Z"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "durationMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "success",
+              "error"
+            ]
+          },
+          "input": {},
+          "output": {},
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "agentName",
+          "trigger",
+          "userId",
+          "userName",
+          "userEmail",
+          "startedAt",
+          "completedAt",
+          "durationMs",
+          "status",
+          "error"
         ]
       },
       "ErrorResponse": {
@@ -2620,6 +2708,110 @@
                   "required": [
                     "ok",
                     "filename"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/bodyspace/audit": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "summary": "Query agent invocation audit log",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "agentName",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "running",
+                "success",
+                "error"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cron",
+                "api",
+                "background"
+              ]
+            },
+            "required": false,
+            "name": "trigger",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Max entries to return (default 50)"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Pagination offset (default 0)"
+            },
+            "required": false,
+            "name": "offset",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated audit log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AuditLogEntry"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "entries",
+                    "total"
                   ]
                 }
               }
