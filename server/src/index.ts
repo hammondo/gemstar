@@ -1,5 +1,4 @@
-import Database from 'better-sqlite3';
-import SqliteStoreFactory from 'better-sqlite3-session-store';
+import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
@@ -8,10 +7,10 @@ import { existsSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { settings } from './bodyspace/config.js';
+import { getPool } from './bodyspace/db.js';
 import apiRouter from './routes/index.js';
 
-const SqliteStore = SqliteStoreFactory(session);
-const sessionDb = new Database(resolve(settings.dataDir, 'sessions.db'));
+const PgSession = connectPgSimple(session);
 
 dotenv.config();
 
@@ -31,7 +30,11 @@ app.use(
 );
 app.use(
     session({
-        store: new SqliteStore({ client: sessionDb }),
+        store: new PgSession({
+            pool: getPool(),
+            tableName: 'sessions',
+            createTableIfMissing: true,
+        }),
         secret: settings.dashboardSessionSecret,
         resave: false,
         saveUninitialized: false,

@@ -47,7 +47,7 @@ export class ImageGeneratorAgent {
     // ── Full campaign run ────────────────────────────────────────────────────
 
     async run(campaignId: string): Promise<void> {
-        const campaign = getCampaignById(campaignId);
+        const campaign = await getCampaignById(campaignId);
         if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
         const pending = campaign.posts.filter(
@@ -70,9 +70,9 @@ export class ImageGeneratorAgent {
         for (let i = 0; i < pending.length; i++) {
             const post = pending[i];
             try {
-                updatePostImage(post.id, '', 'generating');
+                await updatePostImage(post.id, '', 'generating');
                 const imageUrl = await this.generateForPost(post, campaignId, imageDir);
-                updatePostImage(post.id, imageUrl, 'draft');
+                await updatePostImage(post.id, imageUrl, 'draft');
                 success++;
                 this.log.info(
                     { campaignId, postId: post.id, platform: post.platform, postType: post.postType },
@@ -84,13 +84,13 @@ export class ImageGeneratorAgent {
                         { campaignId, postId: post.id, remaining: pending.length - i },
                         'Rate limited by Replicate — retrying in 60s'
                     );
-                    updatePostImage(post.id, '', 'needed');
+                    await updatePostImage(post.id, '', 'needed');
                     await sleep(60_000);
                     i--; // retry this post
                     continue;
                 }
                 failed++;
-                updatePostImage(post.id, '', 'needed');
+                await updatePostImage(post.id, '', 'needed');
                 this.log.error({ campaignId, postId: post.id, error: String(err) }, 'Image generation failed');
             }
         }
@@ -125,10 +125,10 @@ export class ImageGeneratorAgent {
             mkdirSync(imageDir, { recursive: true });
 
             try {
-                updatePostImage(post.id, '', 'generating');
+                await updatePostImage(post.id, '', 'generating');
                 onProgress?.({ type: 'status', message: `Generating image ${i + 1} of ${pending.length}…` });
                 const imageUrl = await this.generateForPost(post, `library/${post.id}`, imageDir);
-                updatePostImage(post.id, imageUrl, 'draft');
+                await updatePostImage(post.id, imageUrl, 'draft');
                 success++;
                 onProgress?.({ type: 'status', message: `✓ Image ${success} of ${pending.length} done` });
                 this.log.info({ postId: post.id, serviceId: post.serviceId }, 'Library image generated');
@@ -139,13 +139,13 @@ export class ImageGeneratorAgent {
                         'Rate limited by Replicate — retrying in 20s'
                     );
                     onProgress?.({ type: 'status', message: 'Rate limited — waiting before retrying…' });
-                    updatePostImage(post.id, '', 'needed');
+                    await updatePostImage(post.id, '', 'needed');
                     await sleep(20_000);
                     i--; // retry this post
                     continue;
                 }
                 failed++;
-                updatePostImage(post.id, '', 'needed');
+                await updatePostImage(post.id, '', 'needed');
                 this.log.error({ postId: post.id, error: String(err) }, 'Library image generation failed');
             }
         }
@@ -161,7 +161,7 @@ export class ImageGeneratorAgent {
         feedback?: string,
         referenceImageUrl?: string
     ): Promise<string> {
-        const campaign = getCampaignById(campaignId);
+        const campaign = await getCampaignById(campaignId);
         if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
         const post = campaign.posts.find((p) => p.id === postId);
@@ -170,14 +170,14 @@ export class ImageGeneratorAgent {
         const imageDir = resolve(settings.dataDir, 'images', campaignId);
         mkdirSync(imageDir, { recursive: true });
 
-        updatePostImage(postId, post.imageUrl ?? '', 'generating');
+        await updatePostImage(postId, post.imageUrl ?? '', 'generating');
         try {
             const imageUrl = await this.generateForPost(post, campaignId, imageDir, feedback, referenceImageUrl);
-            updatePostImage(postId, imageUrl, 'draft');
+            await updatePostImage(postId, imageUrl, 'draft');
             return imageUrl;
         } catch (err) {
             // Restore to 'needed' so the owner can retry — never leave stuck at 'generating'
-            updatePostImage(postId, post.imageUrl ?? '', 'needed');
+            await updatePostImage(postId, post.imageUrl ?? '', 'needed');
             throw err;
         }
     }

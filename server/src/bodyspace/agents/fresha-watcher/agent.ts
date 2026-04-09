@@ -100,7 +100,7 @@ export class FreshaWatcherAgent {
 
         const bookingCounts = this.getBookingCounts();
         const signals = this.computeSignals(bookingCounts);
-        saveAvailabilitySignals(signals);
+        await saveAvailabilitySignals(signals);
 
         const push = Object.values(signals)
             .filter((v) => v.signal === 'push')
@@ -325,7 +325,7 @@ export class FreshaWatcherAgent {
         return null;
     }
 
-    getLatestSignals(): AvailabilitySignals {
+    async getLatestSignals(): Promise<AvailabilitySignals> {
         return getLatestSignals();
     }
 

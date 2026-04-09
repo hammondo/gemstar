@@ -19,8 +19,8 @@ export class SchedulerAgent {
 
     async run(campaignId?: string): Promise<void> {
         const campaigns = campaignId
-            ? ([getCampaignById(campaignId)].filter(Boolean) as Campaign[])
-            : getCampaignsByStatus('approved');
+            ? ([await getCampaignById(campaignId)].filter(Boolean) as Campaign[])
+            : await getCampaignsByStatus('approved');
 
         if (campaigns.length === 0) {
             this.log.info('No approved campaigns to schedule');
@@ -55,7 +55,7 @@ export class SchedulerAgent {
         for (const post of approvedPosts) {
             try {
                 const postizId = await this.schedulePost(post);
-                updatePostStatus(post.id, 'scheduled', { postizPostId: postizId });
+                await updatePostStatus(post.id, 'scheduled', { postizPostId: postizId });
                 success++;
                 this.log.info(
                     {
@@ -77,7 +77,7 @@ export class SchedulerAgent {
         }
 
         if (success > 0) {
-            updateCampaignStatus(campaign.id, 'scheduled');
+            await updateCampaignStatus(campaign.id, 'scheduled');
         }
 
         this.log.info(

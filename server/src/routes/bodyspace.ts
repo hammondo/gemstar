@@ -12,6 +12,7 @@ import { getAllServices, settings } from '../bodyspace/config.js';
 import {
     addPostToCampaign,
     clonePost,
+    getAllCampaigns,
     getAllPosts,
     getCampaignById,
     getCampaignsByStatus,
@@ -35,7 +36,7 @@ import {
     saveMonitorSearchTerms,
     saveSelectedCampaignServices,
 } from '../bodyspace/settings-store.js';
-import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
+import type { CampaignStatus } from '../bodyspace/types.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 
 import { IncomingMessage, ServerResponse } from 'node:http';
@@ -47,8 +48,6 @@ import settingsRouter from './settings.js';
 import wizardRouter from './wizard.js';
 
 // ── SSE helper ────────────────────────────────────────────────────────────────
-// Sets up an SSE response and returns a `send` helper + teardown.
-// Sends `: ping` comments every 25s so proxies don't close idle connections.
 function setupSSE(req: IncomingMessage, res: ServerResponse) {
     req.setTimeout(0);
     res.socket?.setTimeout(0);
@@ -90,19 +89,6 @@ bodyspaceRouter.use(libraryRouter);
 bodyspaceRouter.use(settingsRouter);
 bodyspaceRouter.use(wizardRouter);
 
-const campaignStatuses: CampaignStatus[] = [
-    'draft',
-    'pending_review',
-    'approved',
-    'rejected',
-    'scheduled',
-    'published',
-];
-
-function getAllCampaigns(): Campaign[] {
-    return campaignStatuses.flatMap((status) => getCampaignsByStatus(status));
-}
-
 async function trySyncApprovedPostToBlog(postId: string): Promise<{
     attempted: boolean;
     synced: boolean;
@@ -110,21 +96,21 @@ async function trySyncApprovedPostToBlog(postId: string): Promise<{
     documentId?: string;
     slug?: string;
 }> {
-    const post = getPostById(postId);
+    const post = await getPostById(postId);
     if (!post) {
-        updatePostSanitySync(postId, { status: 'failed', error: 'Post not found' });
+        await updatePostSanitySync(postId, { status: 'failed', error: 'Post not found' });
         return { attempted: false, synced: false, reason: 'Post not found' };
     }
 
     // Use the first associated campaign for context (optional — used for title fallback)
-    const campaign = post.campaigns[0] ? getCampaignById(post.campaigns[0].id) : null;
+    const campaign = post.campaigns[0] ? await getCampaignById(post.campaigns[0].id) : null;
 
     try {
         const publisher = new SanityBlogPublisher();
         const result = await publisher.syncApprovedPost(campaign, post);
 
         if (result.synced) {
-            updatePostSanitySync(postId, {
+            await updatePostSanitySync(postId, {
                 status: 'synced',
                 documentId: result.documentId,
                 slug: result.slug,
@@ -132,7 +118,7 @@ async function trySyncApprovedPostToBlog(postId: string): Promise<{
                 error: '',
             });
         } else {
-            updatePostSanitySync(postId, {
+            await updatePostSanitySync(postId, {
                 status: 'skipped',
                 error: result.reason ?? 'Sanity sync skipped',
             });
@@ -141,33 +127,38 @@ async function trySyncApprovedPostToBlog(postId: string): Promise<{
         return { attempted: true, ...result };
     } catch (err) {
         const reason = String(err);
-        updatePostSanitySync(postId, { status: 'failed', error: reason });
+        await updatePostSanitySync(postId, { status: 'failed', error: reason });
         return { attempted: true, synced: false, reason };
     }
 }
 
-bodyspaceRouter.get('/status', (_req, res) => {
-    const pending = getCampaignsByStatus('pending_review');
-    const approved = getCampaignsByStatus('approved');
-    const scheduled = getCampaignsByStatus('scheduled');
-
-    res.json({
-        ok: true,
-        timezone: settings.timezone,
-        schedules: {
-            freshaWatcher: settings.freshaWatcherCron,
-            monitor: settings.monitorAgentCron,
-            campaignPlanner: settings.campaignPlannerCron,
-        },
-        counts: {
-            pendingReviewCampaigns: pending.length,
-            approvedCampaigns: approved.length,
-            scheduledCampaigns: scheduled.length,
-            scheduledPosts: scheduled.reduce((count, campaign) => {
-                return count + campaign.posts.filter((post) => post.status === 'scheduled').length;
-            }, 0),
-        },
-    });
+bodyspaceRouter.get('/status', async (_req, res) => {
+    try {
+        const [pending, approved, scheduled] = await Promise.all([
+            getCampaignsByStatus('pending_review'),
+            getCampaignsByStatus('approved'),
+            getCampaignsByStatus('scheduled'),
+        ]);
+        res.json({
+            ok: true,
+            timezone: settings.timezone,
+            schedules: {
+                freshaWatcher: settings.freshaWatcherCron,
+                monitor: settings.monitorAgentCron,
+                campaignPlanner: settings.campaignPlannerCron,
+            },
+            counts: {
+                pendingReviewCampaigns: pending.length,
+                approvedCampaigns: approved.length,
+                scheduledCampaigns: scheduled.length,
+                scheduledPosts: scheduled.reduce((count, campaign) => {
+                    return count + campaign.posts.filter((post) => post.status === 'scheduled').length;
+                }, 0),
+            },
+        });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
 });
 
 bodyspaceRouter.get('/analytics/meta', async (_req, res) => {
@@ -184,8 +175,12 @@ bodyspaceRouter.post('/analytics/meta/refresh', (_req, res) => {
     res.json({ ok: true });
 });
 
-bodyspaceRouter.get('/signals', (_req, res) => {
-    res.json({ ok: true, signals: getLatestSignals() });
+bodyspaceRouter.get('/signals', async (_req, res) => {
+    try {
+        res.json({ ok: true, signals: await getLatestSignals() });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
 });
 
 bodyspaceRouter.get('/services', (_req, res) => {
@@ -193,40 +188,55 @@ bodyspaceRouter.get('/services', (_req, res) => {
     res.json({ ok: true, services });
 });
 
-bodyspaceRouter.get('/trends/latest', (_req, res) => {
-    res.json({ ok: true, brief: getLatestTrendsBrief() });
-});
-
-bodyspaceRouter.patch('/trends/:id', (req, res) => {
-    const id = req.params.id as string;
-    const { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities } = req.body as Record<
-        string,
-        string
-    >;
-    const brief = updateTrendsBrief(id, {
-        competitorSummary,
-        trendSignals,
-        seasonalFactors,
-        recommendedFocus,
-        opportunities,
-    });
-    res.json({ ok: true, brief });
-});
-
-bodyspaceRouter.get('/campaigns', (req, res) => {
-    const status = req.query.status as CampaignStatus | undefined;
-    const campaigns = status ? getCampaignsByStatus(status) : getAllCampaigns();
-    res.json({ ok: true, campaigns });
-});
-
-bodyspaceRouter.get('/campaigns/:id', (req, res) => {
-    const campaign = getCampaignById(req.params.id);
-    if (!campaign) {
-        res.status(404).json({ ok: false, error: 'Campaign not found' });
-        return;
+bodyspaceRouter.get('/trends/latest', async (_req, res) => {
+    try {
+        res.json({ ok: true, brief: await getLatestTrendsBrief() });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
     }
+});
 
-    res.json({ ok: true, campaign });
+bodyspaceRouter.patch('/trends/:id', async (req, res) => {
+    try {
+        const id = req.params.id as string;
+        const { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities } = req.body as Record<
+            string,
+            string
+        >;
+        const brief = await updateTrendsBrief(id, {
+            competitorSummary,
+            trendSignals,
+            seasonalFactors,
+            recommendedFocus,
+            opportunities,
+        });
+        res.json({ ok: true, brief });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.get('/campaigns', async (req, res) => {
+    try {
+        const status = req.query.status as CampaignStatus | undefined;
+        const campaigns = status ? await getCampaignsByStatus(status) : await getAllCampaigns();
+        res.json({ ok: true, campaigns });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
+});
+
+bodyspaceRouter.get('/campaigns/:id', async (req, res) => {
+    try {
+        const campaign = await getCampaignById(req.params.id);
+        if (!campaign) {
+            res.status(404).json({ ok: false, error: 'Campaign not found' });
+            return;
+        }
+        res.json({ ok: true, campaign });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
 });
 
 bodyspaceRouter.post('/run/fresha', async (_req, res) => {
@@ -335,9 +345,9 @@ bodyspaceRouter.post('/fresha/import', async (req, res) => {
     }
 });
 
-bodyspaceRouter.get('/posts/:id', (req, res) => {
+bodyspaceRouter.get('/posts/:id', async (req, res) => {
     try {
-        const post = getPostById(req.params.id);
+        const post = await getPostById(req.params.id);
         if (!post) {
             res.status(404).json({ ok: false, error: 'Post not found' });
             return;
@@ -348,7 +358,7 @@ bodyspaceRouter.get('/posts/:id', (req, res) => {
     }
 });
 
-bodyspaceRouter.patch('/posts/:id', (req, res) => {
+bodyspaceRouter.patch('/posts/:id', async (req, res) => {
     try {
         const postId = req.params.id;
         const { copy, scheduledFor } = req.body as { copy?: string; scheduledFor?: string | null };
@@ -356,8 +366,8 @@ bodyspaceRouter.patch('/posts/:id', (req, res) => {
             res.status(400).json({ ok: false, error: 'copy is required' });
             return;
         }
-        updatePostCopy(postId, copy.trim(), scheduledFor);
-        const post = getPostById(postId);
+        await updatePostCopy(postId, copy.trim(), scheduledFor);
+        const post = await getPostById(postId);
         res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -369,24 +379,24 @@ bodyspaceRouter.post('/posts/:id/approve', async (req, res) => {
         const postId = req.params.id;
         const copy = typeof req.body?.copy === 'string' ? req.body.copy : undefined;
         const approval = new ApprovalWorkflow();
-        approval.approvePost(postId, copy?.trim() || undefined);
+        await approval.approvePost(postId, copy?.trim() || undefined);
 
         const blogSync = await trySyncApprovedPostToBlog(postId);
-        const campaigns = getPostCampaigns(postId);
+        const campaigns = await getPostCampaigns(postId);
         res.json({ ok: true, campaigns, blogSync });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-bodyspaceRouter.post('/posts/:id/reject', (req, res) => {
+bodyspaceRouter.post('/posts/:id/reject', async (req, res) => {
     try {
         const postId = req.params.id;
         const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
         const approval = new ApprovalWorkflow();
-        approval.rejectPost(postId, reason);
+        await approval.rejectPost(postId, reason);
 
-        const campaigns = getPostCampaigns(postId);
+        const campaigns = await getPostCampaigns(postId);
         res.json({ ok: true, campaigns });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -398,7 +408,7 @@ bodyspaceRouter.post('/campaigns/:id/approve', async (req, res) => {
         const campaignId = req.params.id;
         const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
         const approval = new ApprovalWorkflow();
-        const campaign = approval.approveCampaign(campaignId, notes);
+        const campaign = await approval.approveCampaign(campaignId, notes);
 
         const scheduler = new SchedulerAgent();
         await scheduler.run(campaignId);
@@ -409,12 +419,12 @@ bodyspaceRouter.post('/campaigns/:id/approve', async (req, res) => {
     }
 });
 
-bodyspaceRouter.post('/campaigns/:id/reject', (req, res) => {
+bodyspaceRouter.post('/campaigns/:id/reject', async (req, res) => {
     try {
         const campaignId = req.params.id;
         const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
         const approval = new ApprovalWorkflow();
-        const campaign = approval.rejectCampaign(campaignId, reason);
+        const campaign = await approval.rejectCampaign(campaignId, reason);
 
         res.json({ ok: true, campaign });
     } catch (err) {
@@ -427,7 +437,6 @@ bodyspaceRouter.post('/schedule', async (req, res) => {
         const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
         const scheduler = new SchedulerAgent();
         await scheduler.run(campaignId);
-
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -436,8 +445,7 @@ bodyspaceRouter.post('/schedule', async (req, res) => {
 
 // ── Image management ────────────────────────────────────────────────────────
 
-// Set image URL manually (owner pastes a URL or uploads via external tool)
-bodyspaceRouter.post('/posts/:id/image', (req, res) => {
+bodyspaceRouter.post('/posts/:id/image', async (req, res) => {
     try {
         const postId = req.params.id;
         const imageUrl = typeof req.body?.imageUrl === 'string' ? req.body.imageUrl.trim() : undefined;
@@ -445,15 +453,14 @@ bodyspaceRouter.post('/posts/:id/image', (req, res) => {
             res.status(400).json({ ok: false, error: 'imageUrl is required' });
             return;
         }
-        updatePostImage(postId, imageUrl, 'draft');
+        await updatePostImage(postId, imageUrl, 'draft');
         res.json({ ok: true, postId, imageUrl, imageStatus: 'draft' });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-// Upload an owner image directly (bypasses AI — saves file and sets as draft)
-bodyspaceRouter.post('/posts/:id/image/upload', upload.single('imageFile'), (req, res) => {
+bodyspaceRouter.post('/posts/:id/image/upload', upload.single('imageFile'), async (req, res) => {
     try {
         const postId = req.params.id as string;
         const file = req.file;
@@ -470,19 +477,18 @@ bodyspaceRouter.post('/posts/:id/image/upload', upload.single('imageFile'), (req
         writeFileSync(dest, buffer);
         unlinkSync(file.path);
         const imageUrl = `${settings.apiBaseUrl}/api/bodyspace/images/${postId}/${filename}`;
-        updatePostImage(postId, imageUrl, 'draft');
-        const post = getPostById(postId);
+        await updatePostImage(postId, imageUrl, 'draft');
+        const post = await getPostById(postId);
         res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-// Approve the current image draft so the post becomes schedulable
 bodyspaceRouter.post('/posts/:id/image/approve', async (req, res) => {
     try {
         const postId = req.params.id;
-        const post = getPostById(postId);
+        const post = await getPostById(postId);
         if (!post) {
             res.status(404).json({ ok: false, error: 'Post not found' });
             return;
@@ -491,17 +497,16 @@ bodyspaceRouter.post('/posts/:id/image/approve', async (req, res) => {
             res.status(400).json({ ok: false, error: 'No image to approve — generate or set one first' });
             return;
         }
-        updatePostImage(postId, post.imageUrl, 'approved');
+        await updatePostImage(postId, post.imageUrl, 'approved');
 
         const blogSync = await trySyncApprovedPostToBlog(postId);
-        const updatedPost = getPostById(postId);
+        const updatedPost = await getPostById(postId);
         res.json({ ok: true, post: updatedPost, blogSync });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-// Manually sync a post to Sanity blog (useful for retries)
 bodyspaceRouter.post('/posts/:id/blog/sync', async (req, res) => {
     try {
         const postId = req.params.id;
@@ -512,14 +517,12 @@ bodyspaceRouter.post('/posts/:id/blog/sync', async (req, res) => {
     }
 });
 
-// Regenerate the AI image for a single post
 bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImageFile'), async (req, res) => {
     try {
         const postId = req.params.id as string;
-        // campaignId is optional — fall back to first associated campaign
         let campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
         if (!campaignId) {
-            const campaigns = getPostCampaigns(postId);
+            const campaigns = await getPostCampaigns(postId);
             campaignId = campaigns[0]?.id;
         }
         if (!campaignId) {
@@ -532,7 +535,6 @@ bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImag
         const feedback = typeof req.body?.feedback === 'string' ? req.body.feedback.trim() : undefined;
         let referenceImageUrl =
             typeof req.body?.referenceImageUrl === 'string' ? req.body.referenceImageUrl.trim() : undefined;
-        // If file uploaded, convert to data URL then clean up the temp file
         const file = req.file;
         if (file) {
             const buffer = readFileSync(file.path);
@@ -630,9 +632,14 @@ bodyspaceRouter.post('/wizard/monitor/stream', (req, res) => {
         });
 });
 
-bodyspaceRouter.get('/wizard/campaign-prompt', (_req, res) => {
-    const planner = new CampaignPlannerAgent();
-    res.json({ ok: true, prompt: planner.buildPromptForWizard() });
+bodyspaceRouter.get('/wizard/campaign-prompt', async (_req, res) => {
+    try {
+        const planner = new CampaignPlannerAgent();
+        const prompt = await planner.buildPromptForWizard();
+        res.json({ ok: true, prompt });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
 });
 
 bodyspaceRouter.post('/wizard/campaign', async (req, res) => {
@@ -658,8 +665,6 @@ bodyspaceRouter.post('/wizard/campaign', async (req, res) => {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
-
-// ── Wizard: suggest monitor search terms ─────────────────────────────────────
 
 bodyspaceRouter.post('/wizard/suggest-terms', async (_req, res) => {
     try {
@@ -730,12 +735,12 @@ Return ONLY a JSON array of strings. Each string should be a full search instruc
     }
 });
 
-// ── Library (universal post browser — all posts) ──────────────────────────
+// ── Library (universal post browser) ──────────────────────────────────────
 
-bodyspaceRouter.get('/library', (req, res) => {
+bodyspaceRouter.get('/library', async (req, res) => {
     try {
         const { serviceId, status, variantTag, campaignId, source } = req.query as Record<string, string | undefined>;
-        const posts = getAllPosts({ serviceId, status, variantTag, campaignId, source } as Parameters<
+        const posts = await getAllPosts({ serviceId, status, variantTag, campaignId, source } as Parameters<
             typeof getAllPosts
         >[0]);
         res.json({ ok: true, posts });
@@ -759,7 +764,6 @@ bodyspaceRouter.post('/run/library', async (req, res) => {
         const agent = new LibraryGeneratorAgent();
         const posts = await agent.run(serviceIds as string[], count);
 
-        // Fire image generation in background
         const imageGen = new ImageGeneratorAgent();
         void imageGen.runForPosts(posts).catch((err) => {
             console.error('[Library] Image generation failed:', err);
@@ -819,7 +823,7 @@ bodyspaceRouter.get('/run/library/images/stream', async (req, res) => {
     };
 
     try {
-        const allPosts = getAllPosts();
+        const allPosts = await getAllPosts();
         const needed = allPosts.filter((p) => p.imageStatus === 'needed' || p.imageStatus === 'generating');
 
         if (needed.length === 0) {
@@ -852,7 +856,7 @@ bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
     };
 
     try {
-        const allPosts = getAllPosts();
+        const allPosts = await getAllPosts();
         const needed = allPosts.filter((p) => p.imageStatus === 'needed' || p.imageStatus === 'generating');
 
         if (needed.length === 0) {
@@ -877,10 +881,9 @@ bodyspaceRouter.post('/run/library/images/stream', async (req, res) => {
     }
 });
 
-// Clone any post as a new standalone draft
-bodyspaceRouter.post('/posts/:id/clone', (req, res) => {
+bodyspaceRouter.post('/posts/:id/clone', async (req, res) => {
     try {
-        const post = clonePost(req.params.id);
+        const post = await clonePost(req.params.id);
         if (!post) {
             res.status(404).json({ ok: false, error: 'Post not found' });
             return;
@@ -891,8 +894,7 @@ bodyspaceRouter.post('/posts/:id/clone', (req, res) => {
     }
 });
 
-// Schedule any post (generalised — no longer library-only)
-bodyspaceRouter.patch('/posts/:id/schedule', (req, res) => {
+bodyspaceRouter.patch('/posts/:id/schedule', async (req, res) => {
     try {
         const postId = req.params.id;
         const { scheduledFor } = req.body as { scheduledFor?: string };
@@ -900,25 +902,23 @@ bodyspaceRouter.patch('/posts/:id/schedule', (req, res) => {
             res.status(400).json({ ok: false, error: 'scheduledFor is required' });
             return;
         }
-        schedulePost(postId, scheduledFor);
-        const post = getPostById(postId);
+        await schedulePost(postId, scheduledFor);
+        const post = await getPostById(postId);
         res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-// Add a post to a campaign
-bodyspaceRouter.post('/campaigns/:id/posts/:postId', (req, res) => {
+bodyspaceRouter.post('/campaigns/:id/posts/:postId', async (req, res) => {
     try {
-        addPostToCampaign(req.params.id, req.params.postId);
+        await addPostToCampaign(req.params.id, req.params.postId);
         res.json({ ok: true });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-// Run image generation for a whole campaign
 bodyspaceRouter.post('/run/image-generator', async (req, res) => {
     try {
         const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
@@ -927,7 +927,6 @@ bodyspaceRouter.post('/run/image-generator', async (req, res) => {
             return;
         }
         const agent = new ImageGeneratorAgent();
-        // Run async and return immediately — generation takes time
         void agent.run(campaignId).catch((err) => {
             console.error('[Route] Image generator error:', err);
         });
@@ -938,8 +937,6 @@ bodyspaceRouter.post('/run/image-generator', async (req, res) => {
 });
 
 // ── Subject inpainting ─────────────────────────────────────────────────────────
-// Accepts a subject image upload + scene description, runs the rembg → FLUX Fill
-// pipeline and returns the result image URL.
 
 const inpaintingDir = resolve(settings.dataDir, 'inpainting');
 mkdirSync(inpaintingDir, { recursive: true });
@@ -978,7 +975,6 @@ bodyspaceRouter.post(
             const subjectBuffer = readFileSync(subjectFile.path);
             unlinkSync(subjectFile.path);
 
-            // Convert any reference image files to data URLs
             const referenceImageUrls: string[] = [];
             const refFiles = files?.['referenceImages'] ?? [];
             for (const f of refFiles) {
@@ -1002,7 +998,7 @@ bodyspaceRouter.post(
     }
 );
 
-// ── SSE Test Endpoint ────────────────────────────────────────────────────────
+// ── SSE Test Endpoints ────────────────────────────────────────────────────────
 
 bodyspaceRouter.get('/test/sse', (req, res) => {
     const { send, done } = setupSSE(req, res);

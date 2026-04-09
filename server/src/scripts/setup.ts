@@ -20,7 +20,7 @@ for (const dir of dirs) {
     console.log(`Created ${dir}`);
 }
 
-const { getDb } = await import('../bodyspace/db.js');
-getDb();
+const { initDb } = await import('../bodyspace/db.js');
+await initDb();
 
 console.log('BodySpace server setup complete');

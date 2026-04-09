@@ -37,9 +37,9 @@ export class CampaignPlannerAgent {
     }
 
     /** Build the campaign prompt using current signals + trends brief, for wizard preview. */
-    public buildPromptForWizard(ownerBrief?: string): string {
-        const signals = getLatestSignals();
-        const brief = getLatestTrendsBrief();
+    public async buildPromptForWizard(ownerBrief?: string): Promise<string> {
+        const signals = await getLatestSignals();
+        const brief = await getLatestTrendsBrief();
         const pushServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'push'));
         const pauseServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'pause'));
         return this.buildPrompt(pushServices, pauseServices, brief, ownerBrief);
@@ -54,8 +54,8 @@ export class CampaignPlannerAgent {
             selectedServices?: string[];
         } = {}
     ): Promise<Campaign> {
-        const signals = options.availabilitySignals ?? getLatestSignals();
-        const brief = options.trendsBrief ?? getLatestTrendsBrief();
+        const signals = options.availabilitySignals ?? await getLatestSignals();
+        const brief = options.trendsBrief ?? await getLatestTrendsBrief();
 
         const pushServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'push'));
         const pauseServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'pause'));
@@ -69,7 +69,7 @@ export class CampaignPlannerAgent {
         const generated = settings.mockAnthropic ? this.getMockCampaign() : await this.generate(prompt);
         const campaign = this.buildCampaignRecord(generated, signals, brief?.id);
 
-        saveCampaign(campaign);
+        await saveCampaign(campaign);
 
         // Write to pending-review folder
         const dir = resolve(settings.dataDir, 'pending-review');

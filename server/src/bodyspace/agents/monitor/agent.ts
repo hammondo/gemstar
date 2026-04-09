@@ -56,7 +56,7 @@ export class MonitorAgent {
     async run(): Promise<TrendsBrief> {
         this.log.info('Starting weekly research');
         const data = settings.mockAnthropic ? this.getMockBrief() : await this.runResearch(this.buildPrompt());
-        const brief = saveTrendsBrief(data);
+        const brief = await saveTrendsBrief(data);
 
         // Write to file for easy review
         const trendsDir = resolve(settings.dataDir, 'trends');
@@ -81,7 +81,7 @@ export class MonitorAgent {
         const data = settings.mockAnthropic
             ? await this.getMockBriefStreaming(onProgress)
             : await this.runResearchStreaming(prompt, onProgress);
-        const brief = saveTrendsBrief(data);
+        const brief = await saveTrendsBrief(data);
 
         const trendsDir = resolve(settings.dataDir, 'trends');
         mkdirSync(trendsDir, { recursive: true });
@@ -317,7 +317,7 @@ Return ONLY valid JSON matching this exact schema:
         return data;
     }
 
-    getLatestBrief(): TrendsBrief | null {
+    async getLatestBrief(): Promise<TrendsBrief | null> {
         return getLatestTrendsBrief();
     }
 }

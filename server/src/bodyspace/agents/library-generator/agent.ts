@@ -80,7 +80,7 @@ export class LibraryGeneratorAgent {
                 callToAction: p.callToAction,
             }));
 
-            const saved = saveLibraryPosts(toSave);
+            const saved = await saveLibraryPosts(toSave);
             allSaved.push(...saved);
 
             onProgress?.({ type: 'status', message: `✓ ${saved.length} posts ready for ${service.name}` });

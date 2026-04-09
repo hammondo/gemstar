@@ -42,8 +42,9 @@ const imagesDir = resolve(settings.dataDir, 'images');
 mkdirSync(imagesDir, { recursive: true });
 campaignsRouter.use('/images', express.static(imagesDir));
 
-function findCampaignByPostId(postId: string): Campaign | null {
-    return getAllCampaigns().find((campaign) => campaign.posts.some((post) => post.id === postId)) ?? null;
+async function findCampaignByPostId(postId: string): Promise<Campaign | null> {
+    const campaigns = await getAllCampaigns();
+    return campaigns.find((campaign) => campaign.posts.some((post) => post.id === postId)) ?? null;
 }
 
 async function trySyncApprovedPostToBlog(postId: string): Promise<{
@@ -53,20 +54,20 @@ async function trySyncApprovedPostToBlog(postId: string): Promise<{
     documentId?: string;
     slug?: string;
 }> {
-    const campaign = findCampaignByPostId(postId);
-    const post = campaign?.posts.find((p: SocialPost) => p.id === postId);
-
-    if (!campaign || !post) {
-        updatePostSanitySync(postId, { status: 'failed', error: 'Post not found' });
+    const post = await getPostById(postId);
+    if (!post) {
+        await updatePostSanitySync(postId, { status: 'failed', error: 'Post not found' });
         return { attempted: false, synced: false, reason: 'Post not found' };
     }
+
+    const campaign = post.campaigns[0] ? await getCampaignById(post.campaigns[0].id) : null;
 
     try {
         const publisher = new SanityBlogPublisher();
         const result = await publisher.syncApprovedPost(campaign, post);
 
         if (result.synced) {
-            updatePostSanitySync(postId, {
+            await updatePostSanitySync(postId, {
                 status: 'synced',
                 documentId: result.documentId,
                 slug: result.slug,
@@ -74,7 +75,7 @@ async function trySyncApprovedPostToBlog(postId: string): Promise<{
                 error: '',
             });
         } else {
-            updatePostSanitySync(postId, {
+            await updatePostSanitySync(postId, {
                 status: 'skipped',
                 error: result.reason ?? 'Sanity sync skipped',
             });
@@ -83,26 +84,34 @@ async function trySyncApprovedPostToBlog(postId: string): Promise<{
         return { attempted: true, ...result };
     } catch (err) {
         const reason = String(err);
-        updatePostSanitySync(postId, { status: 'failed', error: reason });
+        await updatePostSanitySync(postId, { status: 'failed', error: reason });
         return { attempted: true, synced: false, reason };
     }
 }
 
 // ── Campaigns ─────────────────────────────────────────────────────────────────
 
-campaignsRouter.get('/campaigns', (req, res) => {
-    const status = req.query.status as CampaignStatus | undefined;
-    const campaigns = status ? getCampaignsByStatus(status) : getAllCampaigns();
-    res.json({ ok: true, campaigns });
+campaignsRouter.get('/campaigns', async (req, res) => {
+    try {
+        const status = req.query.status as CampaignStatus | undefined;
+        const campaigns = status ? await getCampaignsByStatus(status) : await getAllCampaigns();
+        res.json({ ok: true, campaigns });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
 });
 
-campaignsRouter.get('/campaigns/:id', (req, res) => {
-    const campaign = getCampaignById(req.params.id);
-    if (!campaign) {
-        res.status(404).json({ ok: false, error: 'Campaign not found' });
-        return;
+campaignsRouter.get('/campaigns/:id', async (req, res) => {
+    try {
+        const campaign = await getCampaignById(req.params.id);
+        if (!campaign) {
+            res.status(404).json({ ok: false, error: 'Campaign not found' });
+            return;
+        }
+        res.json({ ok: true, campaign });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
     }
-    res.json({ ok: true, campaign });
 });
 
 campaignsRouter.post('/campaigns/:id/approve', async (req, res) => {
@@ -110,7 +119,7 @@ campaignsRouter.post('/campaigns/:id/approve', async (req, res) => {
         const campaignId = req.params.id;
         const notes = typeof req.body?.notes === 'string' ? req.body.notes : undefined;
         const approval = new ApprovalWorkflow();
-        const campaign = approval.approveCampaign(campaignId, notes);
+        const campaign = await approval.approveCampaign(campaignId, notes);
 
         await withAudit(
             'scheduler',
@@ -130,12 +139,12 @@ campaignsRouter.post('/campaigns/:id/approve', async (req, res) => {
     }
 });
 
-campaignsRouter.post('/campaigns/:id/reject', (req, res) => {
+campaignsRouter.post('/campaigns/:id/reject', async (req, res) => {
     try {
         const campaignId = req.params.id;
         const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
         const approval = new ApprovalWorkflow();
-        const campaign = approval.rejectCampaign(campaignId, reason);
+        const campaign = await approval.rejectCampaign(campaignId, reason);
         res.json({ ok: true, campaign });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -144,9 +153,9 @@ campaignsRouter.post('/campaigns/:id/reject', (req, res) => {
 
 // ── Posts ─────────────────────────────────────────────────────────────────────
 
-campaignsRouter.get('/posts/:id', (req, res) => {
+campaignsRouter.get('/posts/:id', async (req, res) => {
     try {
-        const post = getPostById(req.params.id);
+        const post = await getPostById(req.params.id);
         if (!post) {
             res.status(404).json({ ok: false, error: 'Post not found' });
             return;
@@ -157,7 +166,7 @@ campaignsRouter.get('/posts/:id', (req, res) => {
     }
 });
 
-campaignsRouter.patch('/posts/:id', (req, res) => {
+campaignsRouter.patch('/posts/:id', async (req, res) => {
     try {
         const postId = req.params.id;
         const { copy, scheduledFor } = req.body as { copy?: string; scheduledFor?: string | null };
@@ -165,8 +174,8 @@ campaignsRouter.patch('/posts/:id', (req, res) => {
             res.status(400).json({ ok: false, error: 'copy is required' });
             return;
         }
-        updatePostCopy(postId, copy.trim(), scheduledFor);
-        const post = getPostById(postId);
+        await updatePostCopy(postId, copy.trim(), scheduledFor);
+        const post = await getPostById(postId);
         res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -178,24 +187,24 @@ campaignsRouter.post('/posts/:id/approve', async (req, res) => {
         const postId = req.params.id;
         const copy = typeof req.body?.copy === 'string' ? req.body.copy : undefined;
         const approval = new ApprovalWorkflow();
-        approval.approvePost(postId, copy?.trim() || undefined);
+        await approval.approvePost(postId, copy?.trim() || undefined);
 
         const blogSync = await trySyncApprovedPostToBlog(postId);
-        const campaign = findCampaignByPostId(postId);
+        const campaign = await findCampaignByPostId(postId);
         res.json({ ok: true, campaignId: campaign?.id ?? null, blogSync });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-campaignsRouter.post('/posts/:id/reject', (req, res) => {
+campaignsRouter.post('/posts/:id/reject', async (req, res) => {
     try {
         const postId = req.params.id;
         const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
         const approval = new ApprovalWorkflow();
-        approval.rejectPost(postId, reason);
+        await approval.rejectPost(postId, reason);
 
-        const campaign = findCampaignByPostId(postId);
+        const campaign = await findCampaignByPostId(postId);
         res.json({ ok: true, campaignId: campaign?.id ?? null });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -204,7 +213,7 @@ campaignsRouter.post('/posts/:id/reject', (req, res) => {
 
 // ── Post images ───────────────────────────────────────────────────────────────
 
-campaignsRouter.post('/posts/:id/image', (req, res) => {
+campaignsRouter.post('/posts/:id/image', async (req, res) => {
     try {
         const postId = req.params.id;
         const imageUrl = typeof req.body?.imageUrl === 'string' ? req.body.imageUrl.trim() : undefined;
@@ -212,14 +221,14 @@ campaignsRouter.post('/posts/:id/image', (req, res) => {
             res.status(400).json({ ok: false, error: 'imageUrl is required' });
             return;
         }
-        updatePostImage(postId, imageUrl, 'draft');
+        await updatePostImage(postId, imageUrl, 'draft');
         res.json({ ok: true, postId, imageUrl, imageStatus: 'draft' });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
     }
 });
 
-campaignsRouter.post('/posts/:id/image/upload', upload.single('imageFile'), (req, res) => {
+campaignsRouter.post('/posts/:id/image/upload', upload.single('imageFile'), async (req, res) => {
     try {
         const postId = req.params.id as string;
         const file = req.file;
@@ -236,8 +245,8 @@ campaignsRouter.post('/posts/:id/image/upload', upload.single('imageFile'), (req
         writeFileSync(dest, buffer);
         unlinkSync(file.path);
         const imageUrl = `${settings.apiBaseUrl}/api/bodyspace/images/${postId}/${filename}`;
-        updatePostImage(postId, imageUrl, 'draft');
-        const post = getPostById(postId);
+        await updatePostImage(postId, imageUrl, 'draft');
+        const post = await getPostById(postId);
         res.json({ ok: true, post });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -247,8 +256,7 @@ campaignsRouter.post('/posts/:id/image/upload', upload.single('imageFile'), (req
 campaignsRouter.post('/posts/:id/image/approve', async (req, res) => {
     try {
         const postId = req.params.id;
-        const campaign = findCampaignByPostId(postId);
-        const post = campaign?.posts.find((p: SocialPost) => p.id === postId);
+        const post = await getPostById(postId);
         if (!post) {
             res.status(404).json({ ok: false, error: 'Post not found' });
             return;
@@ -257,10 +265,10 @@ campaignsRouter.post('/posts/:id/image/approve', async (req, res) => {
             res.status(400).json({ ok: false, error: 'No image to approve — generate or set one first' });
             return;
         }
-        updatePostImage(postId, post.imageUrl, 'approved');
+        await updatePostImage(postId, post.imageUrl, 'approved');
 
         const blogSync = await trySyncApprovedPostToBlog(postId);
-        const updatedPost = getPostById(postId);
+        const updatedPost = await getPostById(postId);
         res.json({ ok: true, post: updatedPost, blogSync });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
