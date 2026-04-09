@@ -12,8 +12,9 @@
     "build:server": "npm --prefix server run build",
     "build:dashboard": "npm --prefix dashboard run build",
     "build:website": "npm --prefix website run build",
+    "lint": "npm --prefix server run lint && npm --prefix dashboard run lint",
+    "lint:watch": "concurrently -k -n SERVER,DASHBOARD -c cyan,yellow \"npm --prefix server run lint:watch\" \"npm --prefix dashboard run lint:watch\"",
     "start": "npm --prefix server run start",
-    "start:server": "npm --prefix server run start",
     "test": "npm --prefix server run test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

@@ -584,7 +584,17 @@ export default function LibraryPage() {
                                                         <Badge value={post.status} />
                                                     </td>
                                                     <td className="px-5 py-3.5">
-                                                        {post.imageStatus && <Badge value={post.imageStatus} />}
+                                                        {post.imageUrl ? (
+                                                            <img
+                                                                src={post.imageUrl}
+                                                                alt=""
+                                                                className="h-10 w-10 rounded-lg object-cover"
+                                                            />
+                                                        ) : post.imageStatus ? (
+                                                            <Badge value={post.imageStatus} />
+                                                        ) : (
+                                                            <span className="text-muted text-xs">—</span>
+                                                        )}
                                                     </td>
                                                     <td className="text-muted px-5 py-3.5 text-xs">
                                                         {post.scheduledFor
