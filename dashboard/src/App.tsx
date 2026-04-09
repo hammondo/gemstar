@@ -13,7 +13,6 @@ import DashboardPage from './pages/DashboardPage';
 import LibraryPage from './pages/LibraryPage';
 import NewCampaignWizardPage from './pages/NewCampaignWizardPage';
 import PostDetailPage from './pages/PostDetailPage';
-import PostsPage from './pages/PostsPage';
 import SettingsPage from './pages/SettingsPage';
 import SignalsPage from './pages/SignalsPage';
 import SSETestPage from './pages/SSETestPage';
@@ -86,7 +85,6 @@ export default function App() {
                 <Route path="campaigns" element={<CampaignsPage />} />
                 <Route path="campaigns/new" element={<NewCampaignWizardPage />} />
                 <Route path="campaigns/:id" element={<CampaignDetailPage />} />
-                <Route path="posts" element={<PostsPage />} />
                 <Route path="posts/:id" element={<PostDetailPage />} />
                 <Route path="library" element={<LibraryPage />} />
                 <Route path="signals" element={<SignalsPage />} />
