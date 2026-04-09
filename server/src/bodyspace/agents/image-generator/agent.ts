@@ -100,10 +100,7 @@ export class ImageGeneratorAgent {
 
     // ── Library post batch generation ───────────────────────────────────────
 
-    async runForPosts(
-        posts: SocialPost[],
-        onProgress?: (p: { type: string; message: string }) => void,
-    ): Promise<void> {
+    async runForPosts(posts: SocialPost[], onProgress?: (p: { type: string; message: string }) => void): Promise<void> {
         const pending = posts.filter(
             (p) => !p.imageUrl || p.imageStatus === 'needed' || p.imageStatus === 'generating'
         );
@@ -206,7 +203,7 @@ export class ImageGeneratorAgent {
         // so the linked image acts as influence (object/material cues), not a direct remix.
         // Otherwise fall back to the faster FLUX Schnell text-to-image model.
         const useImgToImg = Boolean(referenceImageUrl);
-        const modelPath = useImgToImg ? 'black-forest-labs/flux-dev' : 'black-forest-labs/flux-schnell';
+        const modelPath = useImgToImg ? 'black-forest-labs/flux-dev' : 'openai/gpt-4o';
 
         const input: Record<string, unknown> = {
             prompt,
