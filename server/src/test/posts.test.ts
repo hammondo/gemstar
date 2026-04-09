@@ -127,11 +127,20 @@ describe('Post routes', () => {
     });
 
     describe('POST /api/bodyspace/posts/:id/image/regenerate', () => {
-        it('returns 400 when post has no campaign and no campaignId provided', async () => {
+        it('uses the first associated campaign when campaignId is omitted', async () => {
+            const res = await request(app).post(`/api/bodyspace/posts/${POST.id}/image/regenerate`).send({});
+            expect(res.status).toBe(200);
+            expect(res.body.ok).toBe(true);
+            expect(res.body.post).toBeDefined();
+            expect(res.body.post.id).toBe(POST.id);
+        });
+
+        it('regenerates even when the post has no campaign association', async () => {
             vi.mocked(getPostCampaigns).mockResolvedValueOnce([]);
             const res = await request(app).post(`/api/bodyspace/posts/${POST.id}/image/regenerate`).send({});
-            expect(res.status).toBe(400);
-            expect(res.body.ok).toBe(false);
+            expect(res.status).toBe(200);
+            expect(res.body.ok).toBe(true);
+            expect(res.body.post).toBeDefined();
         });
     });
 

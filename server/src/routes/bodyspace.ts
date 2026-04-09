@@ -199,10 +199,8 @@ bodyspaceRouter.get('/trends/latest', async (_req, res) => {
 bodyspaceRouter.patch('/trends/:id', async (req, res) => {
     try {
         const id = req.params.id as string;
-        const { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities } = req.body as Record<
-            string,
-            string
-        >;
+        const { competitorSummary, trendSignals, seasonalFactors, recommendedFocus, opportunities } =
+            req.body as Record<string, string>;
         const brief = await updateTrendsBrief(id, {
             competitorSummary,
             trendSignals,
@@ -525,13 +523,6 @@ bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImag
             const campaigns = await getPostCampaigns(postId);
             campaignId = campaigns[0]?.id;
         }
-        if (!campaignId) {
-            res.status(400).json({
-                ok: false,
-                error: 'No campaign associated with this post — pass campaignId explicitly',
-            });
-            return;
-        }
         const feedback = typeof req.body?.feedback === 'string' ? req.body.feedback.trim() : undefined;
         let referenceImageUrl =
             typeof req.body?.referenceImageUrl === 'string' ? req.body.referenceImageUrl.trim() : undefined;
@@ -543,8 +534,10 @@ bodyspaceRouter.post('/posts/:id/image/regenerate', upload.single('referenceImag
         }
         const agent = new ImageGeneratorAgent();
         const imageUrl = await agent.regenerate(postId, campaignId, feedback, referenceImageUrl);
+        const post = await getPostById(postId);
         res.json({
             ok: true,
+            post,
             postId,
             imageUrl,
             imageStatus: 'draft',

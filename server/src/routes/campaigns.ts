@@ -13,12 +13,13 @@ import {
     getCampaignById,
     getCampaignsByStatus,
     getPostById,
+    getPostCampaigns,
     updatePostCopy,
     updatePostImage,
     updatePostSanitySync,
 } from '../bodyspace/db.js';
 import { SanityBlogPublisher } from '../bodyspace/services/sanity-blog-publisher.js';
-import type { Campaign, CampaignStatus, SocialPost } from '../bodyspace/types.js';
+import type { Campaign, CampaignStatus } from '../bodyspace/types.js';
 import { getAgentLogger } from '../bodyspace/utils/logger.js';
 import { ApprovalWorkflow } from '../bodyspace/workflows/approval.js';
 
@@ -278,7 +279,11 @@ campaignsRouter.post('/posts/:id/image/approve', async (req, res) => {
 campaignsRouter.post('/posts/:id/image/regenerate', upload.single('referenceImageFile'), async (req, res) => {
     try {
         const postId = req.params.id as string;
-        const campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
+        let campaignId = typeof req.body?.campaignId === 'string' ? req.body.campaignId : undefined;
+        if (!campaignId) {
+            const campaigns = await getPostCampaigns(postId);
+            campaignId = campaigns[0]?.id;
+        }
         const feedback = typeof req.body?.feedback === 'string' ? req.body.feedback.trim() : undefined;
         let referenceImageUrl =
             typeof req.body?.referenceImageUrl === 'string' ? req.body.referenceImageUrl.trim() : undefined;
@@ -288,14 +293,12 @@ campaignsRouter.post('/posts/:id/image/regenerate', upload.single('referenceImag
             referenceImageUrl = `data:${file.mimetype};base64,${buffer.toString('base64')}`;
             unlinkSync(file.path);
         }
-        if (!campaignId) {
-            res.status(400).json({ ok: false, error: 'campaignId is required' });
-            return;
-        }
         const agent = new ImageGeneratorAgent();
         const imageUrl = await agent.regenerate(postId, campaignId, feedback, referenceImageUrl);
+        const post = await getPostById(postId);
         res.json({
             ok: true,
+            post,
             postId,
             imageUrl,
             imageStatus: 'draft',

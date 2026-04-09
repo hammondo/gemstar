@@ -6,7 +6,7 @@
 import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { getBrandVoice, settings } from '../../config.js';
-import { getCampaignById, updatePostImage } from '../../db.js';
+import { getCampaignById, getPostById, updatePostImage } from '../../db.js';
 import type { Platform, PostType, SocialPost } from '../../types.js';
 import { fetchWithLogging } from '../../utils/http.js';
 import { getAgentLogger } from '../../utils/logger.js';
@@ -154,22 +154,31 @@ export class ImageGeneratorAgent {
 
     async regenerate(
         postId: string,
-        campaignId: string,
+        campaignId?: string,
         feedback?: string,
         referenceImageUrl?: string
     ): Promise<string> {
-        const campaign = await getCampaignById(campaignId);
-        if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+        let post: SocialPost | null = null;
+        let imagePath: string;
 
-        const post = campaign.posts.find((p) => p.id === postId);
-        if (!post) throw new Error(`Post ${postId} not found in campaign ${campaignId}`);
+        if (campaignId) {
+            const campaign = await getCampaignById(campaignId);
+            if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
+            post = campaign.posts.find((candidate) => candidate.id === postId) ?? null;
+            if (!post) throw new Error(`Post ${postId} not found in campaign ${campaignId}`);
+            imagePath = campaignId;
+        } else {
+            post = await getPostById(postId);
+            if (!post) throw new Error(`Post ${postId} not found`);
+            imagePath = post.source === 'library' ? `library/${post.id}` : `posts/${post.id}`;
+        }
 
-        const imageDir = resolve(settings.dataDir, 'images', campaignId);
+        const imageDir = resolve(settings.dataDir, 'images', ...imagePath.split('/'));
         mkdirSync(imageDir, { recursive: true });
 
         await updatePostImage(postId, post.imageUrl ?? '', 'generating');
         try {
-            const imageUrl = await this.generateForPost(post, campaignId, imageDir, feedback, referenceImageUrl);
+            const imageUrl = await this.generateForPost(post, imagePath, imageDir, feedback, referenceImageUrl);
             await updatePostImage(postId, imageUrl, 'draft');
             return imageUrl;
         } catch (err) {
@@ -183,13 +192,13 @@ export class ImageGeneratorAgent {
 
     private async generateForPost(
         post: SocialPost,
-        campaignId: string,
+        imagePath: string,
         imageDir: string,
         feedback?: string,
         referenceImageUrl?: string
     ): Promise<string> {
         if (this.isMock) {
-            return this.getMockUrl(campaignId, post.id);
+            return this.getMockUrl(imagePath, post.id);
         }
 
         if (!this.token) {
@@ -233,7 +242,7 @@ export class ImageGeneratorAgent {
                 },
                 body: JSON.stringify({ input }),
             },
-            { system: 'replicate', operation: 'create_prediction', campaignId, postId: post.id }
+            { system: 'replicate', operation: 'create_prediction', campaignId: imagePath, postId: post.id }
         );
 
         if (res.status === 429) throw new RateLimitError();
@@ -258,7 +267,7 @@ export class ImageGeneratorAgent {
         const localPath = resolve(imageDir, filename);
         await this.downloadFile(prediction.output[0], localPath);
 
-        return `${settings.apiBaseUrl}/api/bodyspace/images/${campaignId}/${filename}`;
+        return `${settings.apiBaseUrl}/api/bodyspace/images/${imagePath}/${filename}`;
     }
 
     private async pollUntilDone(prediction: ReplicatePrediction): Promise<ReplicatePrediction> {
@@ -363,7 +372,7 @@ export class ImageGeneratorAgent {
         return '1:1'; // instagram feed default
     }
 
-    private getMockUrl(campaignId: string, postId: string): string {
+    private getMockUrl(_imagePath: string, postId: string): string {
         // Returns a placeholder — in mock mode images aren't actually generated
         return `${settings.apiBaseUrl}/api/bodyspace/images/mock/${postId}.webp`;
     }
