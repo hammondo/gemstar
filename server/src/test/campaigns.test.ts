@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { makeApp } from './helpers.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CAMPAIGN } from './fixtures.js';
+import { makeApp } from './helpers.js';
 
 vi.mock('../bodyspace/db.js', () => ({
     getAllCampaigns: vi.fn(),
@@ -26,9 +26,9 @@ import { getAllCampaigns, getCampaignById, getCampaignsByStatus } from '../bodys
 const app = makeApp();
 
 beforeEach(() => {
-    vi.mocked(getAllCampaigns).mockReturnValue([CAMPAIGN]);
-    vi.mocked(getCampaignsByStatus).mockReturnValue([CAMPAIGN]);
-    vi.mocked(getCampaignById).mockReturnValue(CAMPAIGN);
+    vi.mocked(getAllCampaigns).mockResolvedValue([CAMPAIGN]);
+    vi.mocked(getCampaignsByStatus).mockResolvedValue([CAMPAIGN]);
+    vi.mocked(getCampaignById).mockResolvedValue(CAMPAIGN);
 });
 
 describe('Campaign routes', () => {
@@ -61,7 +61,7 @@ describe('Campaign routes', () => {
         });
 
         it('returns 404 when campaign not found', async () => {
-            vi.mocked(getCampaignById).mockReturnValueOnce(null);
+            vi.mocked(getCampaignById).mockResolvedValueOnce(null);
             const res = await request(app).get('/api/bodyspace/campaigns/nonexistent');
             expect(res.status).toBe(404);
             expect(res.body.ok).toBe(false);

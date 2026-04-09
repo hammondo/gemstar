@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { completeAuditEntry, failAuditEntry, insertAuditEntry } from './db.js';
 
-export type AuditTrigger = 'cron' | 'api' | 'background';
+export type AuditTrigger = 'cron' | 'api' | 'background' | 'system';
 
 export interface UserContext {
     id: string;

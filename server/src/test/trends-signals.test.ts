@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { makeApp } from './helpers.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SIGNALS, TRENDS } from './fixtures.js';
+import { makeApp } from './helpers.js';
 
 vi.mock('../bodyspace/db.js', () => ({
     getCampaignsByStatus: vi.fn().mockReturnValue([]),
@@ -26,9 +26,9 @@ import { getMetaAnalytics } from '../bodyspace/services/meta-analytics.js';
 const app = makeApp();
 
 beforeEach(() => {
-    vi.mocked(getLatestSignals).mockReturnValue(SIGNALS);
-    vi.mocked(getLatestTrendsBrief).mockReturnValue(TRENDS);
-    vi.mocked(updateTrendsBrief).mockReturnValue(TRENDS);
+    vi.mocked(getLatestSignals).mockResolvedValue(SIGNALS);
+    vi.mocked(getLatestTrendsBrief).mockResolvedValue(TRENDS);
+    vi.mocked(updateTrendsBrief).mockResolvedValue(TRENDS);
 });
 
 describe('Status & system routes', () => {
@@ -72,7 +72,7 @@ describe('Trends routes', () => {
         });
 
         it('returns null brief when none exists', async () => {
-            vi.mocked(getLatestTrendsBrief).mockReturnValueOnce(null);
+            vi.mocked(getLatestTrendsBrief).mockResolvedValueOnce(null);
             const res = await request(app).get('/api/bodyspace/trends/latest');
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ ok: true, brief: null });

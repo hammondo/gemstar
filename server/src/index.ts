@@ -6,8 +6,9 @@ import session from 'express-session';
 import { existsSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { finishAudit, startAudit } from './bodyspace/audit.js';
 import { settings } from './bodyspace/config.js';
-import { getPool } from './bodyspace/db.js';
+import { getPool, initDb } from './bodyspace/db.js';
 import apiRouter from './routes/index.js';
 
 const PgSession = connectPgSimple(session);
@@ -62,8 +63,13 @@ if (existsSync(dashboardDist)) {
     });
 }
 
-const server = app.listen(port, () => {
+await initDb();
+
+const startupId = await startAudit('server', 'system');
+
+const server = app.listen(port, async () => {
     console.log(`Skelly API listening on http://localhost:${port}`);
+    await finishAudit(startupId, { port });
     // startBodyspaceScheduler();
 });
 
@@ -75,3 +81,14 @@ server.on('error', (err: NodeJS.ErrnoException) => {
     }
     process.exit(1);
 });
+
+async function shutdown(signal: string) {
+    const id = await startAudit('server', 'system', null, { signal });
+    server.close(async () => {
+        await finishAudit(id, { signal });
+        process.exit(0);
+    });
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
