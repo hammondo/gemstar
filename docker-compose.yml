@@ -45,7 +45,7 @@ services:
       - DATABASE_URL=postgresql://gemstar:gemstar@postgres:5432/gemstar
       - DATA_DIR=/app/data
     volumes:
-      - gemstar_data:/app/data
+      - app_data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,5 +53,9 @@ services:
 
 volumes:
   postgres_data:
+    name: gemstar-postgres-data
+  app_data:
+    name: gemstar-app-data
   pgadmin_data:
-  gemstar_data:
+    name: gemstar-pgadmin-data
+
