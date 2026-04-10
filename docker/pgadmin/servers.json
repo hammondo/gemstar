@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Gemstar",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "gemstar",
+      "Username": "gemstar",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass"
+    }
+  }
+}

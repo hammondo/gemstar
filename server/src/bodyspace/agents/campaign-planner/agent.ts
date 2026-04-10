@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { getBrandVoice, getServiceById, settings } from '../../config.js';
 import { getLatestSignals, getLatestTrendsBrief, saveCampaign } from '../../db.js';
+import { withBestEffortAudit } from '../../audit.js';
 import type {
     AvailabilitySignals,
     Campaign,
@@ -37,9 +38,9 @@ export class CampaignPlannerAgent {
     }
 
     /** Build the campaign prompt using current signals + trends brief, for wizard preview. */
-    public buildPromptForWizard(ownerBrief?: string): string {
-        const signals = getLatestSignals();
-        const brief = getLatestTrendsBrief();
+    public async buildPromptForWizard(ownerBrief?: string): Promise<string> {
+        const signals = await getLatestSignals();
+        const brief = await getLatestTrendsBrief();
         const pushServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'push'));
         const pauseServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'pause'));
         return this.buildPrompt(pushServices, pauseServices, brief, ownerBrief);
@@ -54,8 +55,8 @@ export class CampaignPlannerAgent {
             selectedServices?: string[];
         } = {}
     ): Promise<Campaign> {
-        const signals = options.availabilitySignals ?? getLatestSignals();
-        const brief = options.trendsBrief ?? getLatestTrendsBrief();
+        const signals = options.availabilitySignals ?? await getLatestSignals();
+        const brief = options.trendsBrief ?? await getLatestTrendsBrief();
 
         const pushServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'push'));
         const pauseServices = Object.fromEntries(Object.entries(signals).filter(([, v]) => v.signal === 'pause'));
@@ -69,7 +70,7 @@ export class CampaignPlannerAgent {
         const generated = settings.mockAnthropic ? this.getMockCampaign() : await this.generate(prompt);
         const campaign = this.buildCampaignRecord(generated, signals, brief?.id);
 
-        saveCampaign(campaign);
+        await saveCampaign(campaign);
 
         // Write to pending-review folder
         const dir = resolve(settings.dataDir, 'pending-review');
@@ -243,15 +244,33 @@ Return ONLY valid JSON:
         let response: Anthropic.Message | undefined;
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-                response = await this.client!.messages.create({
-                    model: 'claude-sonnet-4-20250514',
-                    max_tokens: 8000,
-                    system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio,
+                response = await withBestEffortAudit(
+                    {
+                        agentName: 'outbound:anthropic',
+                        trigger: 'system',
+                        input: {
+                            operation: 'messages.create',
+                            model: 'claude-sonnet-4-20250514',
+                            attempt,
+                            promptBytes: Buffer.byteLength(prompt),
+                        },
+                        getOutput: (result) => ({
+                            operation: 'messages.create',
+                            model: 'claude-sonnet-4-20250514',
+                            stopReason: result.stop_reason,
+                        }),
+                    },
+                    () =>
+                        this.client!.messages.create({
+                            model: 'claude-sonnet-4-20250514',
+                            max_tokens: 8000,
+                            system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio,
 a warm holistic wellness studio in Jandakot, Perth, Western Australia.
 Write post copy that sounds genuinely human — warm, grounded, and personal.
 Output ONLY valid JSON, no preamble, no markdown fences.`,
-                    messages: [{ role: 'user', content: prompt }],
-                });
+                            messages: [{ role: 'user', content: prompt }],
+                        })
+                );
                 break;
             } catch (err) {
                 const isRateLimit = err instanceof Anthropic.RateLimitError;

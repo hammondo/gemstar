@@ -42,9 +42,14 @@ wizardRouter.post('/wizard/monitor/stream', (req, res) => {
         });
 });
 
-wizardRouter.get('/wizard/campaign-prompt', (_req, res) => {
-    const planner = new CampaignPlannerAgent();
-    res.json({ ok: true, prompt: planner.buildPromptForWizard() });
+wizardRouter.get('/wizard/campaign-prompt', async (_req, res) => {
+    try {
+        const planner = new CampaignPlannerAgent();
+        const prompt = await planner.buildPromptForWizard();
+        res.json({ ok: true, prompt });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: String(err) });
+    }
 });
 
 wizardRouter.post('/wizard/campaign', async (req, res) => {

@@ -3,6 +3,7 @@
 // NOTHING is published without passing through this workflow.
 
 import { Resend } from 'resend';
+import { withBestEffortAudit } from '../audit.js';
 import { settings } from '../config.js';
 import { getCampaignById, getCampaignsByStatus, updateCampaignStatus, updatePostStatus } from '../db.js';
 import type { Campaign } from '../types.js';
@@ -34,12 +35,24 @@ export class ApprovalWorkflow {
                 'Outbound request started'
             );
 
-            await this.resend.emails.send({
-                from: 'BodySpace Agent <agent@bodyspacerecoverystudio.com.au>',
-                to: [settings.ownerEmail],
-                subject: `✅ New campaign ready for review: ${campaign.name}`,
-                html: this.buildEmailHtml(campaign, approvalUrl),
-            });
+            await withBestEffortAudit(
+                {
+                    agentName: 'outbound:resend',
+                    trigger: 'system',
+                    input: {
+                        operation: 'emails.send',
+                        campaignId: campaign.id,
+                        to: settings.ownerEmail,
+                    },
+                },
+                () =>
+                    this.resend!.emails.send({
+                        from: 'BodySpace Agent <agent@bodyspacerecoverystudio.com.au>',
+                        to: [settings.ownerEmail],
+                        subject: `✅ New campaign ready for review: ${campaign.name}`,
+                        html: this.buildEmailHtml(campaign, approvalUrl),
+                    })
+            );
 
             this.log.info(
                 {
@@ -69,20 +82,20 @@ export class ApprovalWorkflow {
 
     // ── Approval actions ────────────────────────────────────────────────────
 
-    approvePost(postId: string, editedCopy?: string): void {
-        updatePostStatus(postId, 'approved', {
+    async approvePost(postId: string, editedCopy?: string): Promise<void> {
+        await updatePostStatus(postId, 'approved', {
             ownerEdit: editedCopy || undefined,
         });
         this.log.info({ postId }, 'Post approved');
     }
 
-    rejectPost(postId: string, reason?: string): void {
-        updatePostStatus(postId, 'rejected', { rejectionReason: reason });
+    async rejectPost(postId: string, reason?: string): Promise<void> {
+        await updatePostStatus(postId, 'rejected', { rejectionReason: reason });
         this.log.info({ postId, reason: reason ?? '(no reason)' }, 'Post rejected');
     }
 
-    approveCampaign(campaignId: string, ownerNotes?: string): Campaign {
-        const campaign = getCampaignById(campaignId);
+    async approveCampaign(campaignId: string, ownerNotes?: string): Promise<Campaign> {
+        const campaign = await getCampaignById(campaignId);
         if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
 
         const approvedPosts = campaign.posts.filter((p) => p.status === 'approved');
@@ -90,7 +103,7 @@ export class ApprovalWorkflow {
             throw new Error('Cannot approve campaign — approve at least one post first');
         }
 
-        updateCampaignStatus(campaignId, 'approved', { ownerNotes });
+        await updateCampaignStatus(campaignId, 'approved', { ownerNotes });
         this.log.info(
             { campaignId, campaignName: campaign.name, approvedPosts: approvedPosts.length },
             'Campaign approved'
@@ -99,10 +112,10 @@ export class ApprovalWorkflow {
         return { ...campaign, status: 'approved', ownerNotes };
     }
 
-    rejectCampaign(campaignId: string, reason?: string): Campaign {
-        const campaign = getCampaignById(campaignId);
+    async rejectCampaign(campaignId: string, reason?: string): Promise<Campaign> {
+        const campaign = await getCampaignById(campaignId);
         if (!campaign) throw new Error(`Campaign ${campaignId} not found`);
-        updateCampaignStatus(campaignId, 'rejected', { ownerNotes: reason });
+        await updateCampaignStatus(campaignId, 'rejected', { ownerNotes: reason });
         this.log.info(
             { campaignId, campaignName: campaign.name, reason: reason ?? '(no reason)' },
             'Campaign rejected'
@@ -112,11 +125,11 @@ export class ApprovalWorkflow {
 
     // ── Queries ─────────────────────────────────────────────────────────────
 
-    getPendingCampaigns(): Campaign[] {
+    async getPendingCampaigns(): Promise<Campaign[]> {
         return getCampaignsByStatus('pending_review');
     }
 
-    getApprovedCampaigns(): Campaign[] {
+    async getApprovedCampaigns(): Promise<Campaign[]> {
         return getCampaignsByStatus('approved');
     }
 
@@ -142,11 +155,11 @@ export class ApprovalWorkflow {
     <p style="font-size:14px"><strong>${campaign.posts.length} posts drafted</strong></p>
     <p style="font-size:14px">Services promoted:<ul style="margin:4px 0">${servicesList}</ul></p>
 
-    <p style="font-size:14px;color:#888">Review each post, make any edits, then approve. 
+    <p style="font-size:14px;color:#888">Review each post, make any edits, then approve.
     <strong>Nothing will publish until you approve.</strong></p>
 
     <div style="text-align:center;margin:24px 0">
-      <a href="${approvalUrl}" 
+      <a href="${approvalUrl}"
          style="background:#5c4b3c;color:white;padding:12px 28px;border-radius:6px;
                 text-decoration:none;font-size:15px">
         Review Campaign →

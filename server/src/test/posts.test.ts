@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { POST, POST_WITH_IMAGE } from './fixtures.js';
 import { makeApp } from './helpers.js';
-import { CAMPAIGN, POST, POST_WITH_IMAGE } from './fixtures.js';
 
 vi.mock('../bodyspace/db.js', () => ({
     getAllPosts: vi.fn().mockReturnValue([]),
@@ -30,8 +30,8 @@ import { getPostById, getPostCampaigns } from '../bodyspace/db.js';
 const app = makeApp();
 
 beforeEach(() => {
-    vi.mocked(getPostById).mockReturnValue(POST);
-    vi.mocked(getPostCampaigns).mockReturnValue([{ id: 'cmp-001', name: 'Autumn Wellness' }]);
+    vi.mocked(getPostById).mockResolvedValue(POST);
+    vi.mocked(getPostCampaigns).mockResolvedValue([{ id: 'cmp-001', name: 'Autumn Wellness' }]);
 });
 
 describe('Post routes', () => {
@@ -43,7 +43,7 @@ describe('Post routes', () => {
         });
 
         it('returns 404 when post not found', async () => {
-            vi.mocked(getPostById).mockReturnValueOnce(null);
+            vi.mocked(getPostById).mockResolvedValueOnce(null);
             const res = await request(app).get('/api/bodyspace/posts/nonexistent');
             expect(res.status).toBe(404);
             expect(res.body.ok).toBe(false);
@@ -52,18 +52,14 @@ describe('Post routes', () => {
 
     describe('PATCH /api/bodyspace/posts/:id', () => {
         it('updates post copy and returns the post', async () => {
-            const res = await request(app)
-                .patch(`/api/bodyspace/posts/${POST.id}`)
-                .send({ copy: 'Updated copy' });
+            const res = await request(app).patch(`/api/bodyspace/posts/${POST.id}`).send({ copy: 'Updated copy' });
             expect(res.status).toBe(200);
             expect(res.body.ok).toBe(true);
             expect(res.body.post).toBeDefined();
         });
 
         it('returns 400 when copy is missing', async () => {
-            const res = await request(app)
-                .patch(`/api/bodyspace/posts/${POST.id}`)
-                .send({});
+            const res = await request(app).patch(`/api/bodyspace/posts/${POST.id}`).send({});
             expect(res.status).toBe(400);
             expect(res.body.ok).toBe(false);
         });
@@ -71,9 +67,7 @@ describe('Post routes', () => {
 
     describe('POST /api/bodyspace/posts/:id/approve', () => {
         it('approves the post', async () => {
-            const res = await request(app)
-                .post(`/api/bodyspace/posts/${POST.id}/approve`)
-                .send({});
+            const res = await request(app).post(`/api/bodyspace/posts/${POST.id}/approve`).send({});
             expect(res.status).toBe(200);
             expect(res.body.ok).toBe(true);
             expect(res.body.blogSync).toBeDefined();
@@ -109,9 +103,7 @@ describe('Post routes', () => {
         });
 
         it('returns 400 when imageUrl is missing', async () => {
-            const res = await request(app)
-                .post(`/api/bodyspace/posts/${POST.id}/image`)
-                .send({});
+            const res = await request(app).post(`/api/bodyspace/posts/${POST.id}/image`).send({});
             expect(res.status).toBe(400);
             expect(res.body.ok).toBe(false);
         });
@@ -119,7 +111,7 @@ describe('Post routes', () => {
 
     describe('POST /api/bodyspace/posts/:id/image/approve', () => {
         it('approves the image draft', async () => {
-            vi.mocked(getPostById).mockReturnValue(POST_WITH_IMAGE);
+            vi.mocked(getPostById).mockResolvedValue(POST_WITH_IMAGE);
             const res = await request(app).post(`/api/bodyspace/posts/${POST_WITH_IMAGE.id}/image/approve`);
             expect(res.status).toBe(200);
             expect(res.body.ok).toBe(true);
@@ -135,13 +127,20 @@ describe('Post routes', () => {
     });
 
     describe('POST /api/bodyspace/posts/:id/image/regenerate', () => {
-        it('returns 400 when post has no campaign and no campaignId provided', async () => {
-            vi.mocked(getPostCampaigns).mockReturnValueOnce([]);
-            const res = await request(app)
-                .post(`/api/bodyspace/posts/${POST.id}/image/regenerate`)
-                .send({});
-            expect(res.status).toBe(400);
-            expect(res.body.ok).toBe(false);
+        it('uses the first associated campaign when campaignId is omitted', async () => {
+            const res = await request(app).post(`/api/bodyspace/posts/${POST.id}/image/regenerate`).send({});
+            expect(res.status).toBe(200);
+            expect(res.body.ok).toBe(true);
+            expect(res.body.post).toBeDefined();
+            expect(res.body.post.id).toBe(POST.id);
+        });
+
+        it('regenerates even when the post has no campaign association', async () => {
+            vi.mocked(getPostCampaigns).mockResolvedValueOnce([]);
+            const res = await request(app).post(`/api/bodyspace/posts/${POST.id}/image/regenerate`).send({});
+            expect(res.status).toBe(200);
+            expect(res.body.ok).toBe(true);
+            expect(res.body.post).toBeDefined();
         });
     });
 

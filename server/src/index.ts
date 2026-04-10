@@ -1,5 +1,4 @@
-import Database from 'better-sqlite3';
-import SqliteStoreFactory from 'better-sqlite3-session-store';
+import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
@@ -7,11 +6,12 @@ import session from 'express-session';
 import { existsSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { finishAudit, startAudit } from './bodyspace/audit.js';
 import { settings } from './bodyspace/config.js';
+import { getPool, initDb } from './bodyspace/db.js';
 import apiRouter from './routes/index.js';
 
-const SqliteStore = SqliteStoreFactory(session);
-const sessionDb = new Database(resolve(settings.dataDir, 'sessions.db'));
+const PgSession = connectPgSimple(session);
 
 dotenv.config();
 
@@ -31,7 +31,11 @@ app.use(
 );
 app.use(
     session({
-        store: new SqliteStore({ client: sessionDb }),
+        store: new PgSession({
+            pool: getPool(),
+            tableName: 'sessions',
+            createTableIfMissing: true,
+        }),
         secret: settings.dashboardSessionSecret,
         resave: false,
         saveUninitialized: false,
@@ -59,8 +63,13 @@ if (existsSync(dashboardDist)) {
     });
 }
 
-const server = app.listen(port, () => {
+await initDb();
+
+const startupId = await startAudit('server', 'system');
+
+const server = app.listen(port, async () => {
     console.log(`Skelly API listening on http://localhost:${port}`);
+    await finishAudit(startupId, { port });
     // startBodyspaceScheduler();
 });
 
@@ -72,3 +81,14 @@ server.on('error', (err: NodeJS.ErrnoException) => {
     }
     process.exit(1);
 });
+
+async function shutdown(signal: string) {
+    const id = await startAudit('server', 'system', null, { signal });
+    server.close(async () => {
+        await finishAudit(id, { signal });
+        process.exit(0);
+    });
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));

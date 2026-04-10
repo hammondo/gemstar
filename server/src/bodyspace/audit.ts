@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { completeAuditEntry, failAuditEntry, insertAuditEntry } from './db.js';
 
-export type AuditTrigger = 'cron' | 'api' | 'background';
+export type AuditTrigger = 'cron' | 'api' | 'background' | 'system';
 
 export interface UserContext {
     id: string;
@@ -12,15 +12,15 @@ export interface UserContext {
 // Track start times in memory so duration_ms is accurate
 const startTimes = new Map<string, number>();
 
-export function startAudit(
+export async function startAudit(
     agentName: string,
     trigger: AuditTrigger,
     user?: UserContext | null,
     input?: unknown,
-): string {
+): Promise<string> {
     const id = randomUUID();
     startTimes.set(id, Date.now());
-    insertAuditEntry({
+    await insertAuditEntry({
         id,
         agentName,
         trigger,
@@ -33,16 +33,16 @@ export function startAudit(
     return id;
 }
 
-export function finishAudit(id: string, output?: unknown): void {
+export async function finishAudit(id: string, output?: unknown): Promise<void> {
     const durationMs = Date.now() - (startTimes.get(id) ?? Date.now());
     startTimes.delete(id);
-    completeAuditEntry(id, durationMs, output ?? null);
+    await completeAuditEntry(id, durationMs, output ?? null);
 }
 
-export function failAudit(id: string, error: unknown): void {
+export async function failAudit(id: string, error: unknown): Promise<void> {
     const durationMs = Date.now() - (startTimes.get(id) ?? Date.now());
     startTimes.delete(id);
-    failAuditEntry(id, durationMs, String(error));
+    await failAuditEntry(id, durationMs, String(error));
 }
 
 export async function withAudit<T>(
@@ -52,13 +52,53 @@ export async function withAudit<T>(
     fn: () => Promise<T>,
     options?: { input?: unknown; getOutput?: (result: T) => unknown },
 ): Promise<T> {
-    const auditId = startAudit(agentName, trigger, user, options?.input);
+    const auditId = await startAudit(agentName, trigger, user, options?.input);
     try {
         const result = await fn();
-        finishAudit(auditId, options?.getOutput ? options.getOutput(result) : result ?? undefined);
+        await finishAudit(auditId, options?.getOutput ? options.getOutput(result) : result ?? undefined);
         return result;
     } catch (err) {
-        failAudit(auditId, err);
+        await failAudit(auditId, err);
+        throw err;
+    }
+}
+
+export async function withBestEffortAudit<T>(
+    options: {
+        agentName: string;
+        trigger: AuditTrigger;
+        input?: unknown;
+        getOutput?: (result: T) => unknown;
+    },
+    fn: () => Promise<T>
+): Promise<T> {
+    let auditId: string | null = null;
+
+    try {
+        auditId = await startAudit(options.agentName, options.trigger, null, options.input);
+    } catch {
+        // Best-effort mode: never block core behavior if audit logging fails.
+        auditId = null;
+    }
+
+    try {
+        const result = await fn();
+        if (auditId) {
+            try {
+                await finishAudit(auditId, options.getOutput ? options.getOutput(result) : result ?? undefined);
+            } catch {
+                // Best-effort mode: ignore audit write failures.
+            }
+        }
+        return result;
+    } catch (err) {
+        if (auditId) {
+            try {
+                await failAudit(auditId, err);
+            } catch {
+                // Best-effort mode: ignore audit write failures.
+            }
+        }
         throw err;
     }
 }

@@ -164,11 +164,11 @@ export async function uploadPostImage(postId: string, file: File) {
 
 export async function regeneratePostImage(
     postId: string,
-    campaignId: string,
+    campaignId?: string,
     opts: { feedback?: string; referenceImageUrl?: string } = {}
 ) {
     const form = new FormData();
-    form.append('campaignId', campaignId);
+    if (campaignId) form.append('campaignId', campaignId);
     if (opts.feedback) form.append('feedback', opts.feedback);
     if (opts.referenceImageUrl) form.append('referenceImageUrl', opts.referenceImageUrl);
     return postForm<{ ok: boolean; post: SocialPost }>(`/api/bodyspace/posts/${postId}/image/regenerate`, form);
@@ -176,11 +176,11 @@ export async function regeneratePostImage(
 
 export async function regeneratePostImageWithFile(
     postId: string,
-    campaignId: string,
+    campaignId?: string,
     opts: { feedback?: string; file?: File } = {}
 ) {
     const form = new FormData();
-    form.append('campaignId', campaignId);
+    if (campaignId) form.append('campaignId', campaignId);
     if (opts.feedback) form.append('feedback', opts.feedback);
     if (opts.file) form.append('referenceImageFile', opts.file);
     return postForm<{ ok: boolean; post: SocialPost }>(`/api/bodyspace/posts/${postId}/image/regenerate`, form);

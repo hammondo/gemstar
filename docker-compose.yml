@@ -1,4 +1,38 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gemstar
+      POSTGRES_PASSWORD: gemstar
+      POSTGRES_DB: gemstar
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gemstar -d gemstar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   gemstar:
     image: bodyspace/gemstar
     build: .
@@ -8,7 +42,16 @@ services:
       - server/.env.production
     environment:
       - NODE_ENV=production
+      - DATABASE_URL=postgresql://gemstar:gemstar@postgres:5432/gemstar
       - DATA_DIR=/app/data
     volumes:
-      - ./data:/app/data
+      - gemstar_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  gemstar_data:

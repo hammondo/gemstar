@@ -5,6 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { settings } from '../../config.js';
+import { withBestEffortAudit } from '../../audit.js';
 import { getLatestTrendsBrief, saveTrendsBrief } from '../../db.js';
 import { getMonitorSearchTerms } from '../../settings-store.js';
 import type { GeneratedTrendsBrief, TrendsBrief } from '../../types.js';
@@ -56,7 +57,7 @@ export class MonitorAgent {
     async run(): Promise<TrendsBrief> {
         this.log.info('Starting weekly research');
         const data = settings.mockAnthropic ? this.getMockBrief() : await this.runResearch(this.buildPrompt());
-        const brief = saveTrendsBrief(data);
+        const brief = await saveTrendsBrief(data);
 
         // Write to file for easy review
         const trendsDir = resolve(settings.dataDir, 'trends');
@@ -81,7 +82,7 @@ export class MonitorAgent {
         const data = settings.mockAnthropic
             ? await this.getMockBriefStreaming(onProgress)
             : await this.runResearchStreaming(prompt, onProgress);
-        const brief = saveTrendsBrief(data);
+        const brief = await saveTrendsBrief(data);
 
         const trendsDir = resolve(settings.dataDir, 'trends');
         mkdirSync(trendsDir, { recursive: true });
@@ -143,13 +144,30 @@ Return ONLY valid JSON matching this exact schema:
             'Outbound request started'
         );
 
-        const response = await this.client!.messages.create({
-            model: settings.monitorModel,
-            max_tokens: 4000,
-            system: SYSTEM_PROMPT,
-            tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] as never,
-            messages: [{ role: 'user', content: prompt }],
-        });
+        const response = await withBestEffortAudit(
+            {
+                agentName: 'outbound:anthropic',
+                trigger: 'system',
+                input: {
+                    operation: 'messages.create',
+                    model: settings.monitorModel,
+                    promptBytes: Buffer.byteLength(prompt),
+                },
+                getOutput: (result) => ({
+                    operation: 'messages.create',
+                    model: settings.monitorModel,
+                    stopReason: result.stop_reason,
+                }),
+            },
+            () =>
+                this.client!.messages.create({
+                    model: settings.monitorModel,
+                    max_tokens: 4000,
+                    system: SYSTEM_PROMPT,
+                    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] as never,
+                    messages: [{ role: 'user', content: prompt }],
+                })
+        );
 
         this.log.info(
             {
@@ -219,7 +237,26 @@ Return ONLY valid JSON matching this exact schema:
             onProgress({ type: 'text', message: chunk });
         });
 
-        await stream.finalMessage();
+        await withBestEffortAudit(
+            {
+                agentName: 'outbound:anthropic',
+                trigger: 'system',
+                input: {
+                    operation: 'messages.stream',
+                    model: settings.monitorModel,
+                    promptBytes: Buffer.byteLength(prompt),
+                },
+                getOutput: () => ({
+                    operation: 'messages.stream',
+                    model: settings.monitorModel,
+                    searchCount,
+                }),
+            },
+            async () => {
+                await stream.finalMessage();
+                return searchCount;
+            }
+        );
 
         this.log.info(
             {
@@ -317,7 +354,7 @@ Return ONLY valid JSON matching this exact schema:
         return data;
     }
 
-    getLatestBrief(): TrendsBrief | null {
+    async getLatestBrief(): Promise<TrendsBrief | null> {
         return getLatestTrendsBrief();
     }
 }

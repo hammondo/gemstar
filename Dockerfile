@@ -10,9 +10,6 @@ COPY dashboard/ ./dashboard/
 ARG VITE_API_BASE_URL
 RUN VITE_API_BASE_URL=$VITE_API_BASE_URL npm run build --prefix dashboard
 
-# Install build tools needed to compile better-sqlite3 from source
-RUN apt-get update && apt-get install -y build-essential python3 --no-install-recommends && rm -rf /var/lib/apt/lists/*
-
 # Server deps + build
 COPY server/package*.json ./server/
 RUN npm ci --prefix server

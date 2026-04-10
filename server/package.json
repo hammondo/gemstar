@@ -25,11 +25,10 @@
     "@asteasolutions/zod-to-openapi": "^7.3.4",
     "@azure/msal-node": "^3.8.10",
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "better-sqlite3": "^11.10.0",
-    "better-sqlite3-session-store": "^0.1.0",
+    "connect-pg-simple": "^10.0.0",
+    "pg": "^8.13.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
-    "drizzle-orm": "^0.30.0",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "js-yaml": "^4.1.0",
@@ -44,7 +43,8 @@
     "zod": "^3.22.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
+    "@types/connect-pg-simple": "^7.0.0",
+    "@types/pg": "^8.11.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/express-session": "^1.18.2",

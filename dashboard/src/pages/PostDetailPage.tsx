@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
     type SocialPost,
@@ -99,8 +99,7 @@ export default function PostDetailPage() {
         if (!id || !post) return;
         setImageActing('generating');
         setImageError(null);
-        // Use the first associated campaign as context; server will look it up if omitted
-        const campaignId = post.campaigns?.[0]?.id ?? '';
+        const campaignId = post.campaigns?.[0]?.id;
         try {
             let result;
             if (imageRefFile) {
@@ -168,7 +167,7 @@ export default function PostDetailPage() {
         return (
             <>
                 <PageHeader title="Post" />
-                <div className="py-12 text-center text-sm text-muted">Loading…</div>
+                <div className="text-muted py-12 text-center text-sm">Loading…</div>
             </>
         );
     }
@@ -194,7 +193,7 @@ export default function PostDetailPage() {
                         <button
                             onClick={() => void handleClone()}
                             disabled={!!acting}
-                            className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
+                            className="border-warm-200 text-charcoal hover:bg-warm-100 rounded-lg border bg-white px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
                         >
                             {acting === 'cloning' ? 'Cloning…' : 'Clone as draft'}
                         </button>
@@ -203,14 +202,14 @@ export default function PostDetailPage() {
                                 <button
                                     onClick={() => void handleReject()}
                                     disabled={!!acting}
-                                    className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-muted transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
+                                    className="border-warm-200 text-muted rounded-lg border bg-white px-4 py-2 text-sm font-semibold transition hover:border-red-300 hover:text-red-600 disabled:opacity-50"
                                 >
                                     {acting === 'rejecting' ? 'Rejecting…' : 'Reject'}
                                 </button>
                                 <button
                                     onClick={() => void handleSave()}
                                     disabled={saving || !!acting}
-                                    className="rounded-lg border border-warm-200 bg-white px-4 py-2 text-sm font-semibold text-charcoal transition hover:bg-warm-100 disabled:opacity-50"
+                                    className="border-warm-200 text-charcoal hover:bg-warm-100 rounded-lg border bg-white px-4 py-2 text-sm font-semibold transition disabled:opacity-50"
                                 >
                                     {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
                                 </button>
@@ -241,10 +240,10 @@ export default function PostDetailPage() {
                     ← Back
                 </button>
                 <Badge value={post.status} />
-                <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-teal-700">
+                <span className="bg-warm-100 rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wider text-teal-700 uppercase">
                     {post.platform}
                 </span>
-                <span className="rounded-full bg-warm-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                <span className="bg-warm-100 text-muted rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
                     {post.postType}
                 </span>
             </div>
@@ -252,8 +251,8 @@ export default function PostDetailPage() {
             <div className="grid gap-6 lg:grid-cols-2">
                 {/* Left column: copy, schedule, preview */}
                 <div className="space-y-5">
-                    <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
-                        <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted">
+                    <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
+                        <label className="text-muted mb-2 block text-xs font-semibold tracking-wide uppercase">
                             Post copy
                         </label>
                         <textarea
@@ -261,10 +260,10 @@ export default function PostDetailPage() {
                             onChange={(e) => setCopy(e.target.value)}
                             disabled={!canEdit}
                             rows={10}
-                            className="w-full resize-none rounded-xl border border-warm-200 bg-warm-100 p-3 text-sm leading-relaxed text-charcoal focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400 disabled:opacity-60"
+                            className="border-warm-200 bg-warm-100 text-charcoal w-full resize-none rounded-xl border p-3 text-sm leading-relaxed focus:border-teal-400 focus:ring-1 focus:ring-teal-400 focus:outline-none disabled:opacity-60"
                         />
                         {post.ownerEdit && post.ownerEdit !== post.copy && (
-                            <p className="mt-2 text-xs text-muted">
+                            <p className="text-muted mt-2 text-xs">
                                 Original AI copy:{' '}
                                 <button
                                     className="text-teal-700 underline hover:text-teal-400"
@@ -276,8 +275,8 @@ export default function PostDetailPage() {
                         )}
                     </div>
 
-                    <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
-                        <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-muted">
+                    <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
+                        <label className="text-muted mb-2 block text-xs font-semibold tracking-wide uppercase">
                             Scheduled date &amp; time
                         </label>
                         <input
@@ -285,12 +284,12 @@ export default function PostDetailPage() {
                             value={scheduledFor}
                             onChange={(e) => setScheduledFor(e.target.value)}
                             disabled={!canEdit}
-                            className="w-full rounded-xl border border-warm-200 bg-warm-100 px-3 py-2 text-sm text-charcoal focus:border-teal-400 focus:outline-none focus:ring-1 focus:ring-teal-400 disabled:opacity-60"
+                            className="border-warm-200 bg-warm-100 text-charcoal w-full rounded-xl border px-3 py-2 text-sm focus:border-teal-400 focus:ring-1 focus:ring-teal-400 focus:outline-none disabled:opacity-60"
                         />
                     </div>
 
-                    <div className="rounded-2xl border border-warm-200 bg-white p-5 shadow-sm">
-                        <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-muted">Live preview</p>
+                    <div className="border-warm-200 rounded-2xl border bg-white p-5 shadow-sm">
+                        <p className="text-muted mb-4 text-xs font-semibold tracking-wide uppercase">Live preview</p>
                         <div className="flex justify-center">
                             <PostPreview post={{ ...post, ownerEdit: copy }} />
                         </div>
@@ -300,19 +299,17 @@ export default function PostDetailPage() {
                 {/* Right column: image, details */}
                 <div className="space-y-5">
                     {/* Image panel */}
-                    <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
+                    <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
                         <div className="mb-4 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Image</p>
-                            {post.imageStatus && (
-                                <Badge value={post.imageStatus} />
-                            )}
+                            <p className="text-muted text-xs font-semibold tracking-wide uppercase">Image</p>
+                            {post.imageStatus && <Badge value={post.imageStatus} />}
                         </div>
 
                         {post.imageUrl && (
                             <img
                                 src={post.imageUrl}
                                 alt="Post image"
-                                className="mb-4 w-full rounded-xl border border-warm-200 object-cover"
+                                className="border-warm-200 mb-4 w-full rounded-xl border object-cover"
                             />
                         )}
 
@@ -324,9 +321,9 @@ export default function PostDetailPage() {
 
                         {/* Upload your own image */}
                         <div className="mb-4 space-y-2">
-                            <p className="text-xs font-medium text-muted">Upload your own image</p>
+                            <p className="text-muted text-xs font-medium">Upload your own image</p>
                             <div className="flex items-center gap-2">
-                                <label className="cursor-pointer rounded-lg border border-warm-200 bg-warm-50 px-3 py-1.5 text-xs font-medium text-charcoal transition hover:bg-warm-100">
+                                <label className="border-warm-200 bg-warm-50 text-charcoal hover:bg-warm-100 cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium transition">
                                     {imageUploadFile ? imageUploadFile.name : 'Choose image…'}
                                     <input
                                         ref={uploadInputRef}
@@ -346,8 +343,11 @@ export default function PostDetailPage() {
                                             {imageActing === 'uploading' ? 'Uploading…' : 'Use this image'}
                                         </button>
                                         <button
-                                            onClick={() => { setImageUploadFile(null); if (uploadInputRef.current) uploadInputRef.current.value = ''; }}
-                                            className="text-xs text-muted hover:text-charcoal"
+                                            onClick={() => {
+                                                setImageUploadFile(null);
+                                                if (uploadInputRef.current) uploadInputRef.current.value = '';
+                                            }}
+                                            className="text-muted hover:text-charcoal text-xs"
                                         >
                                             Remove
                                         </button>
@@ -356,46 +356,58 @@ export default function PostDetailPage() {
                             </div>
                         </div>
 
-                        <div className="mb-4 border-t border-warm-100" />
+                        <div className="border-warm-100 mb-4 border-t" />
 
                         {/* AI generation */}
                         <div className="space-y-3">
-                            <p className="text-xs font-medium text-muted">AI generation</p>
+                            <p className="text-muted text-xs font-medium">AI generation</p>
                             <div>
-                                <label className="mb-1 block text-xs text-muted">Feedback</label>
+                                <label className="text-muted mb-1 block text-xs">Feedback</label>
                                 <textarea
                                     value={imageFeedback}
                                     onChange={(e) => setImageFeedback(e.target.value)}
                                     placeholder="e.g. Make it warmer, more inviting…"
                                     rows={2}
-                                    className="w-full resize-none rounded-xl border border-warm-200 bg-warm-100 px-3 py-2 text-xs text-charcoal placeholder:text-muted focus:border-teal-400 focus:outline-none"
+                                    className="border-warm-200 bg-warm-100 text-charcoal placeholder:text-muted w-full resize-none rounded-xl border px-3 py-2 text-xs focus:border-teal-400 focus:outline-none"
                                 />
                             </div>
 
                             <div>
-                                <label className="mb-1 block text-xs text-muted">Reference image URL</label>
+                                <label className="text-muted mb-1 block text-xs">Reference image URL</label>
                                 <input
                                     type="url"
                                     value={imageRefUrl}
-                                    onChange={(e) => { setImageRefUrl(e.target.value); setImageRefFile(null); }}
+                                    onChange={(e) => {
+                                        setImageRefUrl(e.target.value);
+                                        setImageRefFile(null);
+                                    }}
                                     placeholder="https://…"
-                                    className="w-full rounded-xl border border-warm-200 bg-warm-100 px-3 py-2 text-xs text-charcoal placeholder:text-muted focus:border-teal-400 focus:outline-none"
+                                    className="border-warm-200 bg-warm-100 text-charcoal placeholder:text-muted w-full rounded-xl border px-3 py-2 text-xs focus:border-teal-400 focus:outline-none"
                                 />
                             </div>
 
                             <div className="flex items-center gap-2">
-                                <label className="cursor-pointer rounded-lg border border-warm-200 bg-warm-50 px-3 py-1.5 text-xs font-medium text-charcoal transition hover:bg-warm-100">
+                                <label className="border-warm-200 bg-warm-50 text-charcoal hover:bg-warm-100 cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-medium transition">
                                     {imageRefFile ? imageRefFile.name : 'Or upload reference'}
                                     <input
                                         ref={fileInputRef}
                                         type="file"
                                         accept="image/*"
                                         className="sr-only"
-                                        onChange={(e) => { setImageRefFile(e.target.files?.[0] ?? null); setImageRefUrl(''); }}
+                                        onChange={(e) => {
+                                            setImageRefFile(e.target.files?.[0] ?? null);
+                                            setImageRefUrl('');
+                                        }}
                                     />
                                 </label>
                                 {imageRefFile && (
-                                    <button onClick={() => { setImageRefFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="text-xs text-muted hover:text-charcoal">
+                                    <button
+                                        onClick={() => {
+                                            setImageRefFile(null);
+                                            if (fileInputRef.current) fileInputRef.current.value = '';
+                                        }}
+                                        className="text-muted hover:text-charcoal text-xs"
+                                    >
                                         Remove
                                     </button>
                                 )}
@@ -405,9 +417,13 @@ export default function PostDetailPage() {
                                 <button
                                     onClick={() => void handleImageGenerate()}
                                     disabled={!!imageActing}
-                                    className="flex-1 rounded-lg bg-teal-400 px-3 py-2 text-xs font-semibold text-charcoal transition hover:brightness-110 disabled:opacity-50"
+                                    className="text-charcoal flex-1 rounded-lg bg-teal-400 px-3 py-2 text-xs font-semibold transition hover:brightness-110 disabled:opacity-50"
                                 >
-                                    {imageActing === 'generating' ? 'Generating…' : post.imageUrl ? 'Regenerate' : 'Generate'}
+                                    {imageActing === 'generating'
+                                        ? 'Generating…'
+                                        : post.imageUrl
+                                          ? 'Regenerate'
+                                          : 'Generate'}
                                 </button>
                                 {post.imageStatus === 'draft' && (
                                     <button
@@ -423,14 +439,16 @@ export default function PostDetailPage() {
                     </div>
 
                     {post.campaigns && post.campaigns.length > 0 && (
-                        <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
-                            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Used in campaigns</p>
+                        <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
+                            <p className="text-muted mb-3 text-xs font-semibold tracking-wide uppercase">
+                                Used in campaigns
+                            </p>
                             <div className="flex flex-wrap gap-2">
                                 {post.campaigns.map((c) => (
                                     <Link
                                         key={c.id}
                                         to={`/campaigns/${c.id}`}
-                                        className="rounded-full bg-teal-400/15 px-3 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-400/25 transition"
+                                        className="rounded-full bg-teal-400/15 px-3 py-1 text-xs font-semibold text-teal-700 transition hover:bg-teal-400/25"
                                     >
                                         {c.name}
                                     </Link>
@@ -439,47 +457,51 @@ export default function PostDetailPage() {
                         </div>
                     )}
 
-                    <div className="rounded-2xl border border-warm-200 bg-white p-6 shadow-sm">
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Details</p>
+                    <div className="border-warm-200 rounded-2xl border bg-white p-6 shadow-sm">
+                        <p className="text-muted mb-3 text-xs font-semibold tracking-wide uppercase">Details</p>
                         <dl className="space-y-2 text-sm">
                             {post.hashtags?.length > 0 && (
                                 <div>
-                                    <dt className="text-xs text-muted">Hashtags</dt>
-                                    <dd className="mt-0.5 text-charcoal">{post.hashtags.join(' ')}</dd>
+                                    <dt className="text-muted text-xs">Hashtags</dt>
+                                    <dd className="text-charcoal mt-0.5">{post.hashtags.join(' ')}</dd>
                                 </div>
                             )}
                             {post.callToAction && (
                                 <div>
-                                    <dt className="text-xs text-muted">Call to action</dt>
-                                    <dd className="mt-0.5 text-charcoal">{post.callToAction}</dd>
+                                    <dt className="text-muted text-xs">Call to action</dt>
+                                    <dd className="text-charcoal mt-0.5">{post.callToAction}</dd>
                                 </div>
                             )}
                             {post.contentPillar && (
                                 <div>
-                                    <dt className="text-xs text-muted">Content pillar</dt>
-                                    <dd className="mt-0.5 capitalize text-charcoal">{post.contentPillar.replace(/_/g, ' ')}</dd>
+                                    <dt className="text-muted text-xs">Content pillar</dt>
+                                    <dd className="text-charcoal mt-0.5 capitalize">
+                                        {post.contentPillar.replace(/_/g, ' ')}
+                                    </dd>
                                 </div>
                             )}
                             {post.imageDirection && (
                                 <div>
-                                    <dt className="text-xs text-muted">Image direction</dt>
-                                    <dd className="mt-0.5 text-charcoal">{post.imageDirection}</dd>
+                                    <dt className="text-muted text-xs">Image direction</dt>
+                                    <dd className="text-charcoal mt-0.5">{post.imageDirection}</dd>
                                 </div>
                             )}
                             {post.rejectionReason && (
                                 <div>
-                                    <dt className="text-xs text-muted">Rejection reason</dt>
+                                    <dt className="text-muted text-xs">Rejection reason</dt>
                                     <dd className="mt-0.5 text-red-600">{post.rejectionReason}</dd>
                                 </div>
                             )}
                             <div>
-                                <dt className="text-xs text-muted">Created</dt>
-                                <dd className="mt-0.5 text-charcoal">{new Date(post.createdAt).toLocaleString()}</dd>
+                                <dt className="text-muted text-xs">Created</dt>
+                                <dd className="text-charcoal mt-0.5">{new Date(post.createdAt).toLocaleString()}</dd>
                             </div>
                             {post.publishedAt && (
                                 <div>
-                                    <dt className="text-xs text-muted">Published</dt>
-                                    <dd className="mt-0.5 text-charcoal">{new Date(post.publishedAt).toLocaleString()}</dd>
+                                    <dt className="text-muted text-xs">Published</dt>
+                                    <dd className="text-charcoal mt-0.5">
+                                        {new Date(post.publishedAt).toLocaleString()}
+                                    </dd>
                                 </div>
                             )}
                         </dl>

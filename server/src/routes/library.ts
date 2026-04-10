@@ -11,10 +11,10 @@ import { setupSSE } from './sse.js';
 const log = getAgentLogger('LibraryRoute');
 const libraryRouter = Router();
 
-libraryRouter.get('/library', (req, res) => {
+libraryRouter.get('/library', async (req, res) => {
     try {
         const { serviceId, status, variantTag } = req.query as Record<string, string | undefined>;
-        const posts = getAllPosts({ serviceId, status, variantTag } as Parameters<typeof getAllPosts>[0]);
+        const posts = await getAllPosts({ serviceId, status, variantTag } as Parameters<typeof getAllPosts>[0]);
         res.json({ ok: true, posts });
     } catch (err) {
         res.status(500).json({ ok: false, error: String(err) });
@@ -110,7 +110,7 @@ libraryRouter.post('/run/library/images/stream', async (req, res) => {
     };
 
     try {
-        const allLibraryPosts = getAllPosts();
+        const allLibraryPosts = await getAllPosts();
         const needed = allLibraryPosts.filter((p) => p.imageStatus === 'needed' || p.imageStatus === 'generating');
 
         if (needed.length === 0) {
