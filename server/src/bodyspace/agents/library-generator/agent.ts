@@ -3,6 +3,7 @@
 // Posts are stored without scheduled dates — the owner picks and schedules on demand.
 
 import Anthropic from '@anthropic-ai/sdk';
+import { withBestEffortAudit } from '../../audit.js';
 import { getBrandVoice, getServiceById, settings } from '../../config.js';
 import { saveLibraryPosts } from '../../db.js';
 import type {
@@ -159,15 +160,33 @@ Return ONLY valid JSON — an array of objects:
             'Outbound request started'
         );
 
-        const response = await this.client!.messages.create({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 6000,
-            system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio,
+        const response = await withBestEffortAudit(
+            {
+                agentName: 'outbound:anthropic',
+                trigger: 'system',
+                input: {
+                    operation: 'messages.create',
+                    model: 'claude-sonnet-4-20250514',
+                    serviceId,
+                    promptBytes: Buffer.byteLength(prompt),
+                },
+                getOutput: (result) => ({
+                    operation: 'messages.create',
+                    model: 'claude-sonnet-4-20250514',
+                    stopReason: result.stop_reason,
+                }),
+            },
+            () =>
+                this.client!.messages.create({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 6000,
+                    system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio,
 a warm holistic wellness studio in Jandakot, Perth, Western Australia.
 Write post copy that sounds genuinely human — warm, grounded, and personal.
 Output ONLY valid JSON, no preamble, no markdown fences.`,
-            messages: [{ role: 'user', content: prompt }],
-        });
+                    messages: [{ role: 'user', content: prompt }],
+                })
+        );
 
         this.log.info(
             {

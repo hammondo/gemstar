@@ -81,7 +81,12 @@ async function pollUntilDone(prediction: ReplicatePrediction, token: string): Pr
 
     for (let i = 0; i < 60; i++) {
         await sleep(2_000);
-        const res = await fetch(getUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetchWithLogging(
+            log,
+            getUrl,
+            { headers: { Authorization: `Bearer ${token}` } },
+            { system: 'replicate', operation: 'poll_prediction' }
+        );
         if (!res.ok) continue;
         const updated = (await res.json()) as ReplicatePrediction;
         if (['succeeded', 'failed', 'canceled'].includes(updated.status)) return updated;
@@ -90,7 +95,10 @@ async function pollUntilDone(prediction: ReplicatePrediction, token: string): Pr
 }
 
 async function downloadBuffer(url: string): Promise<Buffer> {
-    const res = await fetch(url);
+    const res = await fetchWithLogging(log, url, undefined, {
+        system: 'replicate',
+        operation: 'download_generated_image',
+    });
     if (!res.ok) throw new Error(`Failed to download from Replicate: ${res.status}`);
     return Buffer.from(await res.arrayBuffer());
 }

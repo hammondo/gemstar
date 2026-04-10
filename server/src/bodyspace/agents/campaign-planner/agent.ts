@@ -7,6 +7,7 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { getBrandVoice, getServiceById, settings } from '../../config.js';
 import { getLatestSignals, getLatestTrendsBrief, saveCampaign } from '../../db.js';
+import { withBestEffortAudit } from '../../audit.js';
 import type {
     AvailabilitySignals,
     Campaign,
@@ -243,15 +244,33 @@ Return ONLY valid JSON:
         let response: Anthropic.Message | undefined;
         for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-                response = await this.client!.messages.create({
-                    model: 'claude-sonnet-4-20250514',
-                    max_tokens: 8000,
-                    system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio,
+                response = await withBestEffortAudit(
+                    {
+                        agentName: 'outbound:anthropic',
+                        trigger: 'system',
+                        input: {
+                            operation: 'messages.create',
+                            model: 'claude-sonnet-4-20250514',
+                            attempt,
+                            promptBytes: Buffer.byteLength(prompt),
+                        },
+                        getOutput: (result) => ({
+                            operation: 'messages.create',
+                            model: 'claude-sonnet-4-20250514',
+                            stopReason: result.stop_reason,
+                        }),
+                    },
+                    () =>
+                        this.client!.messages.create({
+                            model: 'claude-sonnet-4-20250514',
+                            max_tokens: 8000,
+                            system: `You are the marketing strategist and copywriter for BodySpace Recovery Studio,
 a warm holistic wellness studio in Jandakot, Perth, Western Australia.
 Write post copy that sounds genuinely human — warm, grounded, and personal.
 Output ONLY valid JSON, no preamble, no markdown fences.`,
-                    messages: [{ role: 'user', content: prompt }],
-                });
+                            messages: [{ role: 'user', content: prompt }],
+                        })
+                );
                 break;
             } catch (err) {
                 const isRateLimit = err instanceof Anthropic.RateLimitError;

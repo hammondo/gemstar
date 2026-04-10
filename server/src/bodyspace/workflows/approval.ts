@@ -3,6 +3,7 @@
 // NOTHING is published without passing through this workflow.
 
 import { Resend } from 'resend';
+import { withBestEffortAudit } from '../audit.js';
 import { settings } from '../config.js';
 import { getCampaignById, getCampaignsByStatus, updateCampaignStatus, updatePostStatus } from '../db.js';
 import type { Campaign } from '../types.js';
@@ -34,12 +35,24 @@ export class ApprovalWorkflow {
                 'Outbound request started'
             );
 
-            await this.resend.emails.send({
-                from: 'BodySpace Agent <agent@bodyspacerecoverystudio.com.au>',
-                to: [settings.ownerEmail],
-                subject: `✅ New campaign ready for review: ${campaign.name}`,
-                html: this.buildEmailHtml(campaign, approvalUrl),
-            });
+            await withBestEffortAudit(
+                {
+                    agentName: 'outbound:resend',
+                    trigger: 'system',
+                    input: {
+                        operation: 'emails.send',
+                        campaignId: campaign.id,
+                        to: settings.ownerEmail,
+                    },
+                },
+                () =>
+                    this.resend!.emails.send({
+                        from: 'BodySpace Agent <agent@bodyspacerecoverystudio.com.au>',
+                        to: [settings.ownerEmail],
+                        subject: `✅ New campaign ready for review: ${campaign.name}`,
+                        html: this.buildEmailHtml(campaign, approvalUrl),
+                    })
+            );
 
             this.log.info(
                 {

@@ -62,3 +62,43 @@ export async function withAudit<T>(
         throw err;
     }
 }
+
+export async function withBestEffortAudit<T>(
+    options: {
+        agentName: string;
+        trigger: AuditTrigger;
+        input?: unknown;
+        getOutput?: (result: T) => unknown;
+    },
+    fn: () => Promise<T>
+): Promise<T> {
+    let auditId: string | null = null;
+
+    try {
+        auditId = await startAudit(options.agentName, options.trigger, null, options.input);
+    } catch {
+        // Best-effort mode: never block core behavior if audit logging fails.
+        auditId = null;
+    }
+
+    try {
+        const result = await fn();
+        if (auditId) {
+            try {
+                await finishAudit(auditId, options.getOutput ? options.getOutput(result) : result ?? undefined);
+            } catch {
+                // Best-effort mode: ignore audit write failures.
+            }
+        }
+        return result;
+    } catch (err) {
+        if (auditId) {
+            try {
+                await failAudit(auditId, err);
+            } catch {
+                // Best-effort mode: ignore audit write failures.
+            }
+        }
+        throw err;
+    }
+}
